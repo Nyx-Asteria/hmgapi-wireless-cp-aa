@@ -103,9 +103,13 @@ final class IdentityInstaller {
                     dcType, dcPower, acType, acPower, themeId, mod.settingBoolean("legacy_theme_identity", false));
             if (rc != 0) throw new NativeFailure(rc);
             armed = true;
-            if (theme != null) mod.log("CarPlay theme identity: " + theme.encoded()
-                    + (mod.settingBoolean("legacy_theme_identity", false)
-                    ? " (legacy parameters 5/6, full tuple)" : " (parameter 6 asset ID only, stock 5 preserved)"));
+            if (theme != null) {
+                boolean legacy = mod.settingBoolean("legacy_theme_identity", false);
+                String encoded = theme.encoded();
+                String reported = legacy ? encoded : encoded.split(":", 2)[0];
+                mod.log("CarPlay theme: configured to report as " + reported
+                        + (legacy ? " (legacy parameters 5/6)" : " (parameter 6, stock 5 preserved)"));
+            }
             refreshStart(mod, app, registry);
         } catch (java.io.UnsupportedEncodingException impossible) {
             throw new AssertionError(impossible);
