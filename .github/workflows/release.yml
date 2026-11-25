@@ -5,7 +5,7 @@
 # has the tools/catalog.py add command for the catalogue PR in HMG-API.
 #
 # Secret, in the "release" environment (v* tags only): MOD_KEY, the author key
-# (base64 of the PKCS#8 key file). Its public half is .github/mod-key.pub.
+# (base64 of the PKCS#8 key file), and MOD_KEY_PUB (base64 of its public half).
 name: Release
 
 on:
@@ -105,11 +105,15 @@ jobs:
       - name: Key
         env:
           MOD_KEY: ${{ secrets.MOD_KEY }}
+          MOD_KEY_PUB: ${{ secrets.MOD_KEY_PUB }}
         run: |
           umask 077
           k="$RUNNER_TEMP/keys"
           mkdir -p "$k"
-          echo "$MOD_KEY" | base64 -d > "$k/mod.key"
+          test -n "$MOD_KEY" && test -n "$MOD_KEY_PUB"
+          printf '%s' "$MOD_KEY" | base64 -d > "$k/mod.key"
+          printf '%s' "$MOD_KEY_PUB" | base64 -d > "$k/mod.key.pub"
+          test -s "$k/mod.key.pub"
           test -s "$k/mod.key" || { echo "MOD_KEY is missing (the release environment's secret)"; exit 1; }
           echo "MOD_KEY_FILE=$k/mod.key" >> "$GITHUB_ENV"
 
