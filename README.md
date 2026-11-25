@@ -96,3 +96,7 @@ CarPlay identification API. [Contributor guide](CONTRIBUTING.md)
 ## License
 
 [AGPL-3.0](LICENSE)
+
+## K5 test fork — 2.2.1-rc.1
+
+Restores direct OEM hotspot startup while retaining upstream navigation fixes and removal of projection arbitration. Optional CPUL theme session-start extension is prepared before Bluetooth iAP2 component 4 connects. Requires verified K5 firmware and receiver metadata; no competing iAP2 patch. Experimental, native dispatch and connection behavior not hardware-verified. Do not replace a working package without a rollback copy.

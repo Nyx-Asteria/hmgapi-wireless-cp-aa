@@ -11,6 +11,7 @@ final class IdentityRegistry implements CarPlayIdentification {
     private final Map<String, VehicleIdentity> vehicles = new LinkedHashMap<String, VehicleIdentity>();
     private final Map<String, ThemeIdentity> themes = new LinkedHashMap<String, ThemeIdentity>();
     private Runnable changed;
+    private boolean sessionStart;
     private Logger logger;
 
     @Override
@@ -38,6 +39,11 @@ final class IdentityRegistry implements CarPlayIdentification {
 
     @Override
     public void registerTheme(String modId, ThemeIdentity theme) {
+        registerTheme(modId, theme, false);
+    }
+
+    @Override
+    public void registerTheme(String modId, ThemeIdentity theme, boolean start) {
         checkModId(modId);
         log("API request from " + modId + ": register theme identity");
         if (theme == null) throw new IllegalArgumentException("theme");
@@ -45,7 +51,7 @@ final class IdentityRegistry implements CarPlayIdentification {
         synchronized (this) {
             if (!themes.isEmpty() && !themes.containsKey(modId))
                 throw new IllegalStateException("CarPlay theme identity already belongs to " + themes.keySet());
-            themes.put(modId, theme); notify = changed;
+            themes.put(modId, theme); sessionStart = start; notify = changed;
         }
         if (notify != null) notify.run();
     }
@@ -55,7 +61,7 @@ final class IdentityRegistry implements CarPlayIdentification {
         checkModId(modId);
         log("API request from " + modId + ": remove theme identity");
         Runnable notify;
-        synchronized (this) { themes.remove(modId); notify = changed; }
+        synchronized (this) { if (themes.remove(modId) != null) sessionStart = false; notify = changed; }
         if (notify != null) notify.run();
     }
 
@@ -73,6 +79,8 @@ final class IdentityRegistry implements CarPlayIdentification {
             throw new IllegalStateException("conflicting CarPlay theme contributors: " + themes.keySet());
         return themes.values().iterator().next();
     }
+
+    synchronized boolean themeSessionStart() { return !themes.isEmpty() && sessionStart; }
 
     synchronized void onChange(Runnable listener) { changed = listener; }
 

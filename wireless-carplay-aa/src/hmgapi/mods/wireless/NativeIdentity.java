@@ -9,4 +9,6 @@ final class NativeIdentity {
     static native int configure(byte[] displayName, int engineType, int dcConnector,
             int dcPowerW, int acConnector, int acPowerW, byte[] themeIdentity);
     static native void shutdown();
+    static native int startSession(byte[] message);
+    static native int startSessionStatus(int which);
 }

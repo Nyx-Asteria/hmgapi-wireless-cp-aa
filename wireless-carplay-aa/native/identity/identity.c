@@ -59,6 +59,8 @@ static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
     if(id==5 || id==6){if(more)*more=0;return theme;}
     return wireless_lookup(id,type,n,key,more);
 }
+#include "start_session.h"
+
 static Param parameter(u16 id,u16 type);
 static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *more){
     (void)type;(void)key;if(more)*more=0;
@@ -86,7 +88,9 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
     if(lock_mutex(&identity_mutex))return 0;
     Param root[24];for(u32 i=0;i<24;i++){
         root[i]=root_table[i];
-        if(has_vehicle && (root[i].id==20 || root[i].id==21)){root[i].used=1;root[i].children=(u32)identity_children;}
+        if(start_len && root[i].id==6 && root[i].length){stock_sent_blob=(Blob)root[i].length;root[i].length=(u32)start_sent_blob;}
+        else if(start_len && root[i].id==7 && root[i].length){stock_received_blob=(Blob)root[i].length;root[i].length=(u32)start_received_blob;}
+        else if(has_vehicle && (root[i].id==20 || root[i].id==21)){root[i].used=1;root[i].children=(u32)identity_children;}
         else if(has_theme && root[i].id==WIRELESS_GROUP && wireless_lookup && root[i].children){
             stock_children=(Children)root[i].children;root[i].children=(u32)identity_children;
         }
@@ -121,6 +125,7 @@ static int bind(void){
     if(!status_lookup || !get_status)return -24;
     u32 n=0;info_table=get_info(&n);if(n!=5 || !info_table)return -25;
     status_table=get_status(&n);if(n!=13 || !status_table)return -26;
+    start_bind(lib); /* optional, no change to stock identification if unavailable */
     return 0;
 }
 static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len){
@@ -134,6 +139,7 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
         for(u32 i=0;i<theme_len;i++)if(theme_id[i]<0x21 || theme_id[i]>0x7e)return -12;
     }
     if(lock_mutex(&identity_mutex))return -15;
+    start_clear_locked();
     has_vehicle=vehicle;has_theme=themed;
     copy(theme,theme_id,theme_len);theme[theme_len]=0;
     if(vehicle){
@@ -162,7 +168,23 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_configure(JNIEnv
     return configure(bytes,(u32)n,engine_type,dc_type,(u32)dc,ac_type,(u32)ac,theme_bytes,(u32)t);
 }
 JNIEXPORT void JNICALL Java_hmgapi_mods_wireless_NativeIdentity_shutdown(JNIEnv *env,jclass cls){
-    (void)env;(void)cls;__atomic_store_n(&configured,0,__ATOMIC_RELEASE);if(hook_mailbox)set_handler(0);
+    (void)env;(void)cls;__atomic_store_n(&configured,0,__ATOMIC_RELEASE);
+    if(lock_mutex && unlock_mutex && !lock_mutex(&identity_mutex)){start_clear_locked();unlock_mutex(&identity_mutex);}
+    if(hook_mailbox)set_handler(0);
+}
+JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSession(JNIEnv *env,jclass cls,jbyteArray message){
+    (void)cls;if(!message)return -12;jsize n=(*env)->GetArrayLength(env,message);
+    if(n>START_MAX)return -12;unsigned char bytes[START_MAX];
+    if(n)(*env)->GetByteArrayRegion(env,message,0,n,(jbyte*)bytes);
+    if((*env)->ExceptionCheck(env))return -12;
+    return start_configure(bytes,(u32)n);
+}
+JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(JNIEnv *env,jclass cls,jint which){
+    (void)env;(void)cls;
+    if(which==0)return (int)__atomic_load_n(&start_offers,__ATOMIC_ACQUIRE);
+    if(which==1)return (int)__atomic_load_n(&start_sends,__ATOMIC_ACQUIRE);
+    if(which==2)return __atomic_load_n(&start_last,__ATOMIC_ACQUIRE);
+    return -1;
 }
 void __aeabi_memclr(void *dest,u32 n){volatile unsigned char *p=dest;while(n--)*p++=0;}
 _Static_assert(sizeof(void*)==4,"HU ABI is ARM32");

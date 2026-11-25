@@ -20,6 +20,9 @@ public interface CarPlayIdentification {
     /** Register or replace one mod's CarPlay theme-asset capability. */
     void registerTheme(String modId, ThemeIdentity theme);
 
+    /** Optional K5 session-start extension; old callers keep identification-only behavior. */
+    void registerTheme(String modId, ThemeIdentity theme, boolean sessionStart);
+
     /** Remove a mod's theme contribution without affecting other identity fields. */
     void removeTheme(String modId);
 
