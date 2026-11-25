@@ -400,7 +400,7 @@
     "com.hkmc.software.connectivity.androidauto_wireless"
   ],
   "wifi": {
-    "projection": true
+    "hotspot": true
   },
   "logs": {
     "tags": [

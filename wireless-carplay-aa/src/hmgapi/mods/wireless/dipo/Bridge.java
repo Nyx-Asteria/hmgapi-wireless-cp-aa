@@ -17,7 +17,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 
 import hmgapi.hook.Points;
-import hmgapi.hook.Wifi;
+import android.net.wifi.WifiConfiguration;
 
 /**
  * Wireless CarPlay's Bluetooth bridge, in DiPO (from the bridge build, com.ev6.cpwl).
@@ -212,8 +212,8 @@ final class Bridge {
                         sSession = false;
                         return;
                     }
-                    // the projection AP for the iPhone to join: HMG-API's (the car may have turned it off since boot)
-                    Wifi.projectionAp(c, "wireless-carplay-aa");
+                    // Restore direct OEM connectivity AP startup for K5 testing.
+                    ensureHotspot(c);
                     Intent i = new Intent(ACTION_ATTACH);
                     i.setPackage(IAP2_PKG);
                     i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
@@ -626,6 +626,36 @@ final class Bridge {
             if (!m.IbtcmSppOutPutStreamWrite(addr, data)) log("SPP write failed, " + data.length + " bytes");
         } catch (Throwable t) {
             error("writeSpp", t);
+        }
+    }
+
+    /** the head unit's hotspot in mode 2 (for connectivity), which wireless CarPlay joins */
+    static void ensureHotspot(Context c) {
+        try {
+            Object wifi = c.getSystemService(Context.WIFI_SERVICE);
+            if (wifi == null) return;
+            Class<?> k = wifi.getClass();
+            boolean on = false;
+            int mode;
+            try {
+                on = (Boolean) k.getMethod("isWifiApEnabled").invoke(wifi);
+            } catch (Throwable t) {
+                // no such call: treat as off
+            }
+            try {
+                mode = (Integer) k.getMethod("getWifiApMode").invoke(wifi);
+            } catch (Throwable t) {
+                mode = -1;
+            }
+            if (on && mode == 2) {
+                log("hotspot already up (mode 2)");
+                return;
+            }
+            Object conf = k.getMethod("getWifiApConfiguration").invoke(wifi);
+            Object r = k.getMethod("setWifiApEnabledForConnectivity", WifiConfiguration.class, boolean.class).invoke(wifi, conf, true);
+            log("setWifiApEnabledForConnectivity -> " + r + " (was on=" + on + " mode=" + mode + ")");
+        } catch (Throwable t) {
+            error("ensureHotspot", t);
         }
     }
 
