@@ -25,15 +25,6 @@ import hmgapi.hook.Points;
  * Through HMG-API's hook points (btsettings.projection_helper.*): HMG-API's map for
  * this car says what they are in this build.
  *
- * The car's "connect a phone" popup (same setting "menu"): Mobis_SystemPopup
- * (com.mobis.system) reads the wireless CarPlay/AA features when it starts, and with
- * either on its Settings button opens com.daudio.app.deviceconnections, an app only the
- * builds that ship wireless projection have. This mod turns those features on, so on the
- * US/Canadian builds that button crashed com.mobis.system (ActivityNotFoundException).
- * The hook on Activity.startActivityForResult in that app sends it to Phone Projection's
- * own Device Connections page (what the button opens with the features off), only when
- * the unit has no such activity (hook point framework.activity.start_activity_for_result).
- *
  * USB drives (setting "usb_drives"): the Android Auto app (HKMC_GPM) starts a wired
  * session for every USB_DEVICE_ATTACHED, so a USB drive (install stick, music) leaves
  * GalConnectionManager "Already AA Starting" with a wired start that never connects, and
@@ -62,14 +53,6 @@ public final class Wireless extends ModEntry {
     }
 
     static final String BTSETTINGS = "com.android.btsettings";
-    static final String SYSTEM_POPUP = "com.mobis.system";
-    /** what the popup's Settings button opens with the wireless features on: not on US/Canadian builds */
-    static final String INTEGRATED_PKG = "com.daudio.app.deviceconnections",
-            INTEGRATED_CLASS = "com.daudio.app.deviceconnections.ui.connectivitySettings.PhoneProjectionSettingsActivity";
-    /** what it opens with them off: Phone Projection's Device Connections page, on every build.
-     *  Names, not ComponentNames: a static ComponentName would run Android code when the class loads */
-    static final String PROJECTION_PKG = "com.daudio.app.phoneprojection",
-            PROJECTION_CLASS = "com.daudio.app.phoneprojection.settings.ui.DeviceConnectionSettings";
     static final String GPM = "com.google.android.projection.sink";
     static final String GAL_SERVICE = "com.google.android.projection.service.GalReceiverService";
     static final int USB_CLASS_MASS_STORAGE = 8, USB_CLASS_HUB = 9;
@@ -104,7 +87,6 @@ public final class Wireless extends ModEntry {
         if (GPM.equals(app.packageName) && mod.settingBoolean("usb_drives", true)) usbDrives(mod, app);
         if (GPM.equals(app.packageName) && mod.settingBoolean("tbt", true)) gpmTurnByTurn(mod, app);
         if (BTSETTINGS.equals(app.packageName) && mod.settingBoolean("menu", true)) phoneProjectionMenu(mod, app);
-        if (SYSTEM_POPUP.equals(app.packageName) && mod.settingBoolean("menu", true)) popupSettings(mod, app);
         if (DIPO.equals(app.packageName) && (mod.settingBoolean("tbt", true) || mod.settingBoolean("bridge", true) || mod.settingBoolean("audio", true))) dipo(mod, app);
     }
 
@@ -372,23 +354,6 @@ public final class Wireless extends ModEntry {
             if (cls != USB_CLASS_MASS_STORAGE && cls != USB_CLASS_HUB) return false;
         }
         return true;
-    }
-
-    /** the "connect a phone" popup's Settings button: Phone Projection's page when this build lacks the other */
-    private void popupSettings(final ModContext mod, LoadedApp app) {
-        mod.hook(null, "framework.activity.start_activity_for_result", new MethodHook() {
-            @Override
-            protected void beforeHookedMethod(Param p) {
-                Intent i = (Intent) p.args[0];
-                ComponentName to = i == null ? null : i.getComponent();
-                if (to == null || !INTEGRATED_PKG.equals(to.getPackageName()) || !INTEGRATED_CLASS.equals(to.getClassName())) return;
-                Context c = (Context) p.thisObject;
-                if (c.getPackageManager().resolveActivity(i, 0) != null) return;   // a build with that app: as stock
-                i.setClassName(PROJECTION_PKG, PROJECTION_CLASS);
-                mod.log("Phone Projection: the car's popup opens Phone Projection's settings (no Device Connections app on this build)");
-            }
-        });
-        mod.log("Phone Projection popup hook in " + app.processName);
     }
 
     private void phoneProjectionMenu(final ModContext mod, LoadedApp app) {
