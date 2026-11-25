@@ -56,7 +56,7 @@ static void *info_value(u16 id,u16 type,u16 *n,void *key,int *more){
 }
 static void *status_value(u16 id,u16 type,u16 *n,void *key,int *more){return status_lookup(id,type,n,key,more);}
 static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
-    if(id==5 || id==6){if(more)*more=0;return theme;}
+    if(id==6){if(more)*more=0;return theme;}
     return wireless_lookup(id,type,n,key,more);
 }
 #include "start_session.h"
@@ -69,9 +69,12 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
     if(id==WIRELESS_GROUP && stock_children){
         u32 n=0;const Param *stock=stock_children(id,type,(u16*)&n,key,more);
         if(!stock || n>WIRELESS_MAX){*count=(u16)n;return stock;}
-        for(u32 i=0;i<n;i++)wireless_copy[i]=stock[i];
-        wireless_copy[n]=parameter(5,12);wireless_copy[n+1]=parameter(6,10);
-        *count=(u16)(n+2);if(more)*more=0;return wireless_copy;
+        /* LIVI advertises only the asset identifier in transport group 24,
+           parameter 6. Preserve stock parameter 5 and avoid duplicate 6. */
+        u32 used=0;
+        for(u32 i=0;i<n;i++)if(stock[i].id!=6)wireless_copy[used++]=stock[i];
+        wireless_copy[used++]=parameter(6,10);
+        *count=(u16)used;if(more)*more=0;return wireless_copy;
     }
     return 0;
 }
@@ -141,7 +144,11 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     if(lock_mutex(&identity_mutex))return -15;
     start_clear_locked();
     has_vehicle=vehicle;has_theme=themed;
-    copy(theme,theme_id,theme_len);theme[theme_len]=0;
+    /* API v2 still accepts the complete tuple; identification carries only
+       its asset identifier. StartSessionCodec carries version and SDK. */
+    u32 asset_len=0;
+    while(asset_len<theme_len && theme_id[asset_len]!=':')asset_len++;
+    copy(theme,theme_id,asset_len);theme[asset_len]=0;
     if(vehicle){
         copy(display_name,name,len);display_name[len]=0;engine=(u32)engine_type;dc_connector=(u32)dc_type;ac_connector=(u32)ac_type;dc_w=dc;ac_w=ac;
         for(u32 i=0;i<5;i++){
