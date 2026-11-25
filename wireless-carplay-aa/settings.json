@@ -59,9 +59,9 @@
       "key": "menu",
       "type": "toggle",
       "default": true,
-      "title": "Phone Projection settings open Device Connections",
+      "title": "Settings > Phone Projection opens Device Connections",
       "apply": "restart",
-      "description": "Settings > Phone Projection, and the Settings button of the car's \"connect a phone\" popup, open Device Connections as on a stock car. With the wireless features on, the first would open the wireless page and the second an app these builds don't have (it crashed). Hooks only (no files changed). Settings > Phone Projection: US/Canada only; other regions keep the stock choice."
+      "description": "A hook in the Settings app (no files changed). US/Canada only; other regions keep the stock choice."
     },
     {
       "key": "usb_drives",
