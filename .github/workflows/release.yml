@@ -1,7 +1,7 @@
 # A release from a tag v<version>, refused unless it's wireless-carplay-aa/mod.json's
 # version: CI on the tag (HMG-API's mod workflow), then the package signed with the author
-# key, its NEMESIS packages and SHA256SUMS, attached to a *draft* GitHub release.
-# Publishing it stays a person's call (none before HMG-API 1.0.3). The run's summary
+# key, its NEMESIS packages and SHA256SUMS, published as a normal GitHub release.
+# RC version labels are retained; the run's summary
 # has the tools/catalog.py add command for the catalogue PR in HMG-API.
 #
 # Secret, in the "release" environment (v* tags only): MOD_KEY, the author key
@@ -136,12 +136,11 @@ jobs:
           tag="v$v"
           notes=".github/release-notes/$tag.md"
           test -s "$notes"; set -- --notes-file "$notes"
-          pre=""; case "$tag" in *-*) pre="--prerelease --latest=false" ;; esac   # a pre-release is never "Latest"
-          gh release create "$tag" $pre --target "$GITHUB_SHA" --title "Wireless CarPlay + Android Auto $v" "$@" out/assets/*
+          gh release create "$tag" --draft=false --prerelease=false --latest=true --target "$GITHUB_SHA" --title "Wireless CarPlay + Android Auto $v" "$@" out/assets/*
           {
             echo "### Published release $tag"
             case "$v" in
-              *-*) echo "A pre-release isn't for the catalogue (finals only); a HMG-API pre-release that bundles it pins it with this tools/release-mods.txt line:" ;;
+              *-*) echo "This RC is published as a normal GitHub release but remains a test version (not for the upstream finals-only catalogue). Pin it with this tools/release-mods.txt line:" ;;
               *) echo "The catalogue PR in HMG-API (a maintainer's) starts with:" ;;
             esac
             echo '```'
