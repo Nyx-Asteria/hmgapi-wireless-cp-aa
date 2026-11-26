@@ -58,6 +58,7 @@ public final class Dipo {
     static final int RG_UPDATE = 120, RG_MANEUVER = 121, RG_LANES = 122;
     static final String[] RG_COMPONENTS = { "RouteGuidanceComponent0" };
 
+    private static SessionJournal journal;
     static ModContext mod;
     static LoadedApp app;
     static volatile IIap2Service iap2;
@@ -81,21 +82,26 @@ public final class Dipo {
 
     static void log(String m) {
         mod.log(m);
+        if (journal != null) journal.record(m);
     }
 
     static void error(String m, Throwable t) {
         mod.error(m, t);
+        if (journal != null) journal.record(m + " error=" + t.getClass().getSimpleName());
     }
 
     /** Wireless.appLoaded, in DiPO's process */
     public static void start(ModContext m, LoadedApp a) {
         mod = m;
         app = a;
+        if (a.context != null) journal = new SessionJournal(a.context, "wcp-carplay-sessions");
         tbt = m.settingBoolean("tbt", true);
         bridge = m.settingBoolean("bridge", true);
         nowPlaying = bridge && m.settingBoolean("now_playing", true);
         CarPlayLog.on = m.settingBoolean("carplay_log", false);
         CarPlayLog.apply("start");
+        try { installSessionJournal(m, a); }
+        catch (Throwable t) { m.error("CarPlay session journal hook unavailable", t); }
         // the CarPlay libraries, patched in memory once DiPO loads them (files stay stock)
         if (bridge) m.nativePatch(a, "libCarPlayCore.so");   // AirPlay sessions over Wi-Fi
         if (m.settingBoolean("audio", true)) {
@@ -138,6 +144,23 @@ public final class Dipo {
      * Do not use DIPO_SHORTCUT: that service's side effects are not verified.
      * No sleep, network operation, reconnect, or retry is performed here.
      */
+    private static void installSessionJournal(final ModContext m, final LoadedApp a) {
+        if (journal == null || !Points.has("dipo.carplay.session_started")
+                || !Points.has("dipo.carplay.session_finalized")) return;
+        m.hook(a.classLoader, "dipo.carplay.session_started", new MethodHook() {
+            @Override protected void afterHookedMethod(Param p) {
+                if (!p.hasThrowable()) journal.start("transport=" +
+                        (p.args.length > 0 ? p.args[0] : "unknown"));
+            }
+        });
+        m.hook(a.classLoader, "dipo.carplay.session_finalized", new MethodHook() {
+            @Override protected void afterHookedMethod(Param p) {
+                journal.end("session finalized type=" +
+                        (p.args.length > 0 ? p.args[0] : "unknown"));
+            }
+        });
+    }
+
     private static void installAutoOpen(final ModContext m, final LoadedApp a) {
         if (a.context == null || !Points.has("dipo.carplay.session_started")
                 || !Points.has("dipo.carplay.session_finalized")) return;
