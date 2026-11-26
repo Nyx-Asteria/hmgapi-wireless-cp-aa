@@ -248,10 +248,10 @@ final class Bridge {
     }
 
     private static volatile long diagnosticCreatedAt, diagnosticStartedAt;
-    private static final java.util.concurrent.atomic.AtomicInteger attachGeneration = new java.util.concurrent.atomic.AtomicInteger();
+    private static final AttachGeneration attachGeneration = new AttachGeneration();
 
     private static boolean currentAttach(int generation) {
-        return generation == attachGeneration.get() && sCpClient && !sUsb;
+        return attachGeneration.current(generation, sCpClient, sUsb);
     }
 
     static void onCpSessionCreated(Object cp) {
@@ -297,7 +297,7 @@ final class Bridge {
     }
 
     static void onCpSessionFinalized(int type) {
-        attachGeneration.incrementAndGet();
+        attachGeneration.advance();
         try {
             int pendingCount;
             long rxOverflow;
@@ -356,7 +356,7 @@ final class Bridge {
         sCpConnected = false;
         final String addr = sAddr;
         sCpSerial = addr;
-        final int generation = attachGeneration.incrementAndGet();
+        final int generation = attachGeneration.advance();
         if (reattachEnabled()) sReattach.sessionUp();
         Dipo.rgSessionUp();
         txWatch();
@@ -558,7 +558,7 @@ final class Bridge {
         // the dead link's sender is abandoned (a native call blocked in it is never waited for); the new link gets a fresh thread and queue
         sCpTx.reset("re-attach #" + attempt, true);
         final String addr = sCpSerial != null ? sCpSerial : sAddr;
-        final int generation = attachGeneration.incrementAndGet();
+        final int generation = attachGeneration.advance();
         handler().post(new Runnable() {
             @Override
             public void run() {
