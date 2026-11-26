@@ -386,14 +386,20 @@ final class Bridge {
             all = new ArrayList<byte[]>(sPendingIn);
             sPendingIn.clear();
         }
+        int delivered = 0, failed = 0;
+        long began = now();
         for (byte[] b : all) {
             try {
                 s.Iap2SvcTransportReadDone(b, b.length);
+                delivered++;
             } catch (Throwable t) {
+                failed++;
                 error("flushPending", t);
             }
         }
-        log("flushed " + all.size() + " buffered CarPlay-channel packets");
+        log("CarPlay buffered receive flush attempted=" + all.size()
+                + " returnedNormally=" + delivered + " threw=" + failed
+                + " elapsedMs=" + (now() - began));
     }
 
     private static Method nativeSend() {
