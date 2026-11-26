@@ -12,10 +12,12 @@ while true; do
         grep -F " $root " /proc/mounts >/dev/null 2>&1 ||
             grep -F " $canonical " /proc/mounts >/dev/null 2>&1 || continue
         dest="$root/$usb_name/sessions"
+        [ ! -L "$root/$usb_name" ] && [ ! -L "$dest" ] || continue
         mkdir -p "$dest" || continue
         for src in "$source_dir"/session-*.log; do
-            [ -f "$src" ] || continue
+            [ -f "$src" ] && [ ! -L "$src" ] || continue
             name=${src##*/}
+            [ ! -L "$dest/$name" ] && [ ! -L "$dest/$name.part" ] || continue
             [ -f "$dest/$name" ] && cmp -s "$src" "$dest/$name" && continue
             if cat "$src" > "$dest/$name.part" && cmp -s "$src" "$dest/$name.part"; then
                 mv "$dest/$name.part" "$dest/$name" || rm -f "$dest/$name.part"
