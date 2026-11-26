@@ -40,6 +40,12 @@ final class SessionJournal {
         }});
     }
 
+    /** A new creation attempt is a recording boundary, even without finalization. */
+    synchronized void beginAttempt(String detail) {
+        end("superseded by session creation callback");
+        start(detail);
+    }
+
     synchronized void start(final String detail) {
         if (accepting) return;
         accepting = true;
