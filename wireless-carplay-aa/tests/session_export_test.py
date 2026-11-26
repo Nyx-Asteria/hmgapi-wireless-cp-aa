@@ -1,0 +1,59 @@
+"""Run production exporter with a fake mount and legacy/modern logcat."""
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+for modern in (False, True):
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        src = d / "journal"
+        native = d / "native"
+        usb = d / "storage/usb0"
+        binpath = d / "bin"
+        for f in (src, native, usb, binpath):
+            f.mkdir(parents=True)
+        mounts = d / "mounts"
+        mounts.write_text("")
+        marker = src / "session-001.native-enabled"
+        active = src / "session-001.active"
+        marker.write_text("enabled")
+        active.write_text("START\n")
+        (src / "session-002.log").write_text("complete\n")
+        (src / "session-003.active").write_text("no native opt-in\n")
+        dest = usb / "WCP-LOGS/sessions"
+        logcat = binpath / "logcat"
+        helptext = "-T COUNT" if modern else "-t COUNT"
+        logcat.write_text("#!/bin/sh\n"
+            + 'if [ "$1" = -h ]; then echo "' + helptext + '"; exit 0; fi\n'
+            + 'echo "$*" > "' + str(d / "args") + '"\n'
+            + 'while [ "$#" -gt 0 ]; do if [ "$1" = -f ]; then shift; printf "native\\n" > "$1"; break; fi; shift; done\n'
+            + 'while true; do /bin/sleep 1; done\n')
+        logcat.chmod(0o755)
+        sleep = binpath / "sleep"
+        sleep.write_text("#!/bin/sh\n"
+            + 'n=$(cat "' + str(d / "ticks") + '" 2>/dev/null || echo 0)\n'
+            + 'n=$((n+1)); echo "$n" > "' + str(d / "ticks") + '"\n'
+            + '/bin/sleep 0.1\n'
+            + 'case "$n" in\n'
+            + '1) [ ! -e "' + str(dest) + '" ] || exit 99; echo "dev ' + str(usb) + ' vfat rw 0 0" > "' + str(mounts) + '";;\n'
+            + '2) [ ! -e "' + str(dest / "session-001.native.log") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
+            + '4) kill -TERM "$PPID";;\nesac\n')
+        sleep.chmod(0o755)
+        script = (root / "export-sessions.sh").read_text()
+        script = script.replace("/data/data/com.daudio.app.dipo/files/wcp-carplay-sessions", str(src))
+        script = script.replace("/data/hmgapi/logs/wcp-native-session", str(native))
+        script = script.replace("/storage/usb", str(d / "storage/usb"))
+        script = script.replace("/proc/mounts", str(mounts))
+        subprocess.run(["sh", "-c", script], env={**os.environ, "PATH":str(binpath)+":"+os.environ["PATH"]},
+                       check=True, timeout=15)
+        assert ("-T 200" in (d / "args").read_text()) == modern
+        assert not (d / "premature").exists()
+        assert (dest / "session-001.native.log").read_text() == "native\n"
+        assert (dest / "session-002.log").read_text() == "complete\n"
+        assert not (dest / "session-003.active").exists()
+        assert not list(native.glob("session-003*"))
+        assert not list(dest.glob("*.part"))
+        assert (src / "session-001.log").exists()
+        print("Native export passed: modern=" + str(modern))
