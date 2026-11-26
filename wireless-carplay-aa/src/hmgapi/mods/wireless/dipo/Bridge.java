@@ -281,16 +281,21 @@ final class Bridge {
             byte[] b = new byte[len];
             System.arraycopy(data, 0, b, 0, len);
             if (!sCpClient) startCpClient("iAP2 data from CarPlay channel");
-            IIap2Service s = sIap2;
-            if (sCpConnected && s != null) {
-                flushPending(s);
-                s.Iap2SvcTransportReadDone(b, len);
-            } else {
-                synchronized (sPendingIn) {
+            final IIap2Service s;
+            synchronized (sPendingIn) {
+                // Decide whether to queue while holding the same lock used by the
+                // connection callback's drain. Otherwise a packet can be queued
+                // just after that callback drains the pending list.
+                s = sIap2;
+                if (!sCpConnected || s == null) {
                     if (sPendingIn.size() < MAX_PENDING) sPendingIn.add(b);
                     else diagnosticRxOverflow++;
+                    return;
                 }
             }
+            // Never hold the pending-list monitor across Binder calls.
+            flushPending(s);
+            s.Iap2SvcTransportReadDone(b, len);
         } catch (Throwable t) {
             error("onCpIapIn", t);
         }
