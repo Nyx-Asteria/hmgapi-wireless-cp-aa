@@ -248,6 +248,11 @@ final class Bridge {
     }
 
     private static volatile long diagnosticCreatedAt, diagnosticStartedAt;
+    private static final java.util.concurrent.atomic.AtomicInteger attachGeneration = new java.util.concurrent.atomic.AtomicInteger();
+
+    private static boolean currentAttach(int generation) {
+        return generation == attachGeneration.get() && sCpClient && !sUsb;
+    }
 
     static void onCpSessionCreated(Object cp) {
         diagnosticCreatedAt = now();
@@ -292,6 +297,7 @@ final class Bridge {
     }
 
     static void onCpSessionFinalized(int type) {
+        attachGeneration.incrementAndGet();
         try {
             int pendingCount;
             long rxOverflow;
@@ -350,6 +356,7 @@ final class Bridge {
         sCpConnected = false;
         final String addr = sAddr;
         sCpSerial = addr;
+        final int generation = attachGeneration.incrementAndGet();
         if (reattachEnabled()) sReattach.sessionUp();
         Dipo.rgSessionUp();
         txWatch();
@@ -357,6 +364,7 @@ final class Bridge {
             @Override
             public void run() {
                 try {
+                    if (!currentAttach(generation)) return;
                     Context c = context;
                     if (c == null) return;
                     Intent i = new Intent(ACTION_ATTACH);
@@ -364,6 +372,7 @@ final class Bridge {
                     i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                     i.putExtra("component", COMPONENT_CARPLAY_CLIENT);
                     i.putExtra("serial", addr);
+                    if (!currentAttach(generation)) return;
                     c.sendBroadcast(i);
                     log("iAP2 handover to CarPlay channel requested (" + why + ")");
                 } catch (Throwable t) {
@@ -549,6 +558,7 @@ final class Bridge {
         // the dead link's sender is abandoned (a native call blocked in it is never waited for); the new link gets a fresh thread and queue
         sCpTx.reset("re-attach #" + attempt, true);
         final String addr = sCpSerial != null ? sCpSerial : sAddr;
+        final int generation = attachGeneration.incrementAndGet();
         handler().post(new Runnable() {
             @Override
             public void run() {
@@ -560,6 +570,7 @@ final class Bridge {
                     i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                     i.putExtra("component", COMPONENT_CARPLAY_CLIENT);
                     i.putExtra("serial", addr);
+                    if (!currentAttach(generation)) return;
                     c.sendBroadcast(i);
                     log("iAP2 handover to CarPlay channel requested again (re-attach #" + attempt + ")");
                 } catch (Throwable t) {
