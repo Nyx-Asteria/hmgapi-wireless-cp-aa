@@ -245,7 +245,11 @@ final class Bridge {
         }, SPP_CONNECT_DELAY_MS);
     }
 
+    private static volatile long diagnosticCreatedAt, diagnosticStartedAt;
+
     static void onCpSessionCreated(Object cp) {
+        diagnosticCreatedAt = now();
+        diagnosticStartedAt = 0;
         if (cp != null) sCp = cp;
         log("CarPlay session created (usb=" + sUsb + " btAddr=" + sAddr + ")");
         if ("created".equals(prop("persist.ev6.cpwl.handover", "data")) && !sUsb && sAddr != null) {
@@ -254,6 +258,9 @@ final class Bridge {
     }
 
     static void onCpSessionStarted(int transport) {
+        if (diagnosticStartedAt == 0) diagnosticStartedAt = now();
+        log("CarPlay milestone session-start createdToStartMs="
+                + (diagnosticCreatedAt == 0 ? -1 : diagnosticStartedAt - diagnosticCreatedAt));
         sCpWireless = transport == 1 && !sUsb;
         log("CarPlay session started transport=" + transport + " wireless=" + sCpWireless);
     }
@@ -283,6 +290,15 @@ final class Bridge {
 
     static void onCpSessionFinalized(int type) {
         try {
+            int pendingCount;
+            synchronized (sPendingIn) { pendingCount = sPendingIn.size(); }
+            long elapsed = diagnosticStartedAt == 0 ? -1 : now() - diagnosticStartedAt;
+            log("CarPlay teardown snapshot type=" + type + " durationMs=" + elapsed
+                    + " wireless=" + sCpWireless + " client=" + sCpClient
+                    + " connected=" + sCpConnected + " rxPending=" + pendingCount
+                    + " " + sCpTx.diagnosticSnapshot());
+            diagnosticStartedAt = 0;
+            diagnosticCreatedAt = 0;
             log("CarPlay session finalized type=" + type + " cpClient=" + sCpClient);
             sReattach.sessionEnd();
             Dipo.rgSessionEnd();
