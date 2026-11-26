@@ -6,6 +6,8 @@
 set -e
 cd "$(dirname "$0")"
 CP=$(mktemp -d); trap 'rm -rf "$CP"' EXIT
-javac --release 8 -Xlint:-options -nowarn -d "$CP" $(find test -name '*.java') ../../src/hmgapi/mods/wireless/dipo/Reattach.java ../../src/hmgapi/mods/wireless/dipo/CpTx.java ../../src/hmgapi/mods/wireless/dipo/RgWatch.java
+javac --release 8 -Xlint:-options -nowarn -d "$CP" $(find test -name '*.java') ../../src/hmgapi/mods/wireless/dipo/Reattach.java ../../src/hmgapi/mods/wireless/dipo/CpTx.java ../../src/hmgapi/mods/wireless/dipo/RgWatch.java ../../src/hmgapi/mods/wireless/dipo/AttachGeneration.java
 java -cp "$CP" hmgapi.mods.wireless.dipo.ReattachTest
 java -cp "$CP" hmgapi.mods.wireless.dipo.RgWatchTest
+
+java -cp "$CP" hmgapi.mods.wireless.dipo.AttachGenerationTest
