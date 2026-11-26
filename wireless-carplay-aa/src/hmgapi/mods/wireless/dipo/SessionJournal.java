@@ -46,6 +46,10 @@ final class SessionJournal {
             active = new File(dir, "session-" + wall + "-" + UUID.randomUUID().toString() + ".active");
             header = wall + "\t" + elapsed + "\tSTART " + detail + "\n";
             append(active, header, true);
+            if (CarPlayLog.on) {
+                File marker = new File(dir, active.getName().replace(".active", ".native-enabled"));
+                append(marker, "enabled\n".replace("\n", ""), false);
+            }
         }});
     }
 
@@ -74,7 +78,9 @@ final class SessionJournal {
             // Sync final bytes before exposing a completed file to the USB exporter.
             append(active, "", true);
             File completed = new File(dir, active.getName().replace(".active", ".log"));
-            active.renameTo(completed);
+            if (active.renameTo(completed)) {
+                new File(dir, active.getName().replace(".active", ".native-enabled")).delete();
+            }
             active = null;
             prune();
         }});
