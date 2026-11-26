@@ -33,7 +33,7 @@ jobs:
 
   ci:
     needs: version
-    uses: Open-HMG/HMG-API/.github/workflows/mod.yml@daa083717f07565ba16dc8a4d26291b7d68d3bf4
+    uses: ./.github/workflows/mod-source-floor.yml
 
   release:
     needs: ci
