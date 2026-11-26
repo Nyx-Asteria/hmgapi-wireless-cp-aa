@@ -36,3 +36,6 @@ jobs:
           java-version: '17'
       - name: Production session journal regression
         run: python3 wireless-carplay-aa/tests/session_journal_test.py
+
+      - name: Native session USB export regression
+        run: python3 wireless-carplay-aa/tests/session_export_test.py
