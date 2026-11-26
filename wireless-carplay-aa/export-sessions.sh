@@ -13,10 +13,26 @@ stop_native() {
     native_pid=
 }
 trap 'stop_native; exit 0' HUP INT TERM
+# Keep at most twelve native session groups, including rotation segments.
+prune_native() {
+    count=0
+    for file in "$native_dir"/session-*.native.log; do
+        [ -f "$file" ] || continue
+        count=$((count + 1))
+    done
+    for file in "$native_dir"/session-*.native.log; do
+        [ "$count" -gt 12 ] || break
+        [ -f "$file" ] || continue
+        name=${file##*/}; base=${name%.native.log}
+        [ "$base" != "$native_session" ] || continue
+        rm -f "$file" "$file.1" "$file.2" "$file.3"
+        count=$((count - 1))
+    done
+}
 # Start at the live tail; bounded rotation stays on disk, never in a Java String.
 start_native() {
     native_session=$1
-    logcat -v threadtime -T 1 -f "$native_dir/$native_session.native.log" -r 1024 -n 3 -s TccCarPlay:I '*:S' &
+    logcat -v threadtime -T 200 -f "$native_dir/$native_session.native.log" -r 1024 -n 3 -s TccCarPlay:I '*:S' &
     native_pid=$!
 }
 # Never export native payloads without explicit opt-in through the existing logger setting.
@@ -25,7 +41,7 @@ start_native() {
 while true; do
     current=
     for marker in "$source_dir"/session-*.native-enabled; do
-        [ -f "$marker" ] || continue
+        [ -f "$marker" ] && [ ! -L "$marker" ] || continue
         base=${marker##*/}; base=${base%.native-enabled}
         [ -f "$source_dir/$base.active" ] && current=$base
     done
@@ -33,6 +49,7 @@ while true; do
         stop_native
         native_session=
         [ -z "$current" ] || start_native "$current"
+        prune_native
     fi
     for root in /storage/usb0 /storage/usb1 /storage/usb2; do
         [ -d "$root" ] || continue
