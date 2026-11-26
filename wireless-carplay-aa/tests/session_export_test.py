@@ -14,6 +14,9 @@ for modern in (False, True):
         binpath = d / "bin"
         for f in (src, native, usb, binpath):
             f.mkdir(parents=True)
+        cmp = binpath / "cmp"
+        cmp.write_text('#!/bin/sh\ncase "$1" in -*) echo "cmp: invalid option" >&2; exit 2;; esac\nexec /usr/bin/cmp "$@"\n')
+        cmp.chmod(0o755)
         mounts = d / "mounts"
         mounts.write_text("")
         marker = src / "session-001.native-enabled"
