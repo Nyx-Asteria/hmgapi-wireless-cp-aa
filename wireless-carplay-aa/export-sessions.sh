@@ -29,10 +29,16 @@ prune_native() {
         count=$((count - 1))
     done
 }
-# Start at the live tail; bounded rotation stays on disk, never in a Java String.
+# Prefer a short historical tail when supported; older Android logcat lacks -T.
+# The fallback reads the existing bounded ring before following live output.
 start_native() {
     native_session=$1
-    logcat -v threadtime -T 200 -f "$native_dir/$native_session.native.log" -r 1024 -n 3 -s TccCarPlay:I '*:S' &
+    if logcat -h 2>&1 | grep -E '(^|[[:space:]])-T([[:space:],]|$)' >/dev/null; then
+        set -- -T 200
+    else
+        set --
+    fi
+    logcat -v threadtime "$@" -f "$native_dir/$native_session.native.log" -r 1024 -n 3 -s TccCarPlay:I '*:S' &
     native_pid=$!
 }
 # Never export native payloads without explicit opt-in through the existing logger setting.
