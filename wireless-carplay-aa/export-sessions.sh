@@ -84,8 +84,9 @@ while true; do
             [ "$base" != "$native_session" ] || continue
             [ ! -L "$dest/$name" ] && [ ! -L "$dest/$name.part" ] || continue
             [ -f "$dest/$name" ] && continue
-            # Scrub common addresses; native logs may still contain personal device details.
-            if sed 's/[[:xdigit:]][[:xdigit:]]:[[:xdigit:]][[:xdigit:]]:[[:xdigit:]][[:xdigit:]]:[[:xdigit:]][[:xdigit:]]:[[:xdigit:]][[:xdigit:]]:[[:xdigit:]][[:xdigit:]]/[MAC]/g' "$src" > "$dest/$name.part"; then
+            # Native logs are explicitly opt-in and can contain personal device details.
+            # Do not pretend to redact on firmware without the necessary tools.
+            if cat "$src" > "$dest/$name.part" && cmp -s "$src" "$dest/$name.part"; then
                 mv "$dest/$name.part" "$dest/$name" || rm -f "$dest/$name.part"
             else
                 rm -f "$dest/$name.part"
