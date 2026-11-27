@@ -69,10 +69,17 @@ public final class SessionExporterTest {
             } catch (IOException expected) {}
             check(new String(Files.readAllBytes(target.toPath()), "UTF-8").equals("other data"), "conflict retained");
             check(Arrays.equals(SessionExporter.digest(later), SessionExporter.digest(new File(dest, later.getName()))), "later session exported despite conflict");
+            File invalid = new File(dest, src.getName() + ".complete.invalid");
+            check(!complete.exists() && invalid.isFile(), "stale known marker retired");
+            check(new String(Files.readAllBytes(invalid.toPath()), "UTF-8").equals(manifest), "old manifest preserved");
             check(target.delete(), "remove conflict");
             put(part, "old partial");
             SessionExporter.exportDirectory(spool, logs, "sessions");
             check(!part.exists() && Arrays.equals(SessionExporter.digest(src), SessionExporter.digest(target)), "partial recovery");
+            check(complete.isFile() && invalid.isFile(), "fresh completion and historical evidence coexist");
+            check(target.delete(), "simulate missing exported payload");
+            SessionExporter.exportDirectory(spool, logs, "sessions");
+            check(target.isFile() && complete.isFile() && invalid.isFile(), "missing payload recovered");
             SessionExporter.MountGuard guard = new SessionExporter.MountGuard(usb, mounts);
             File removable = new File(spool, "session-004.log");
             put(removable, "complete before removal");
