@@ -67,17 +67,7 @@ while true; do
         dest="$root/$usb_name/sessions"
         [ ! -L "$root/$usb_name" ] && [ ! -L "$dest" ] || continue
         mkdir -p "$dest" || continue
-        for src in "$source_dir"/session-*.log; do
-            [ -f "$src" ] && [ ! -L "$src" ] || continue
-            name=${src##*/}
-            [ ! -L "$dest/$name" ] && [ ! -L "$dest/$name.part" ] || continue
-            [ -f "$dest/$name" ] && cmp "$src" "$dest/$name" >/dev/null 2>&1 && continue
-            if cat "$src" > "$dest/$name.part" && cmp "$src" "$dest/$name.part" >/dev/null 2>&1; then
-                mv "$dest/$name.part" "$dest/$name" || rm -f "$dest/$name.part"
-            else
-                rm -f "$dest/$name.part"
-            fi
-        done
+        # Java service owns finalized Java journals; this collector exports native logs only.
         for src in "$native_dir"/session-*.native.log*; do
             [ -f "$src" ] && [ ! -L "$src" ] || continue
             name=${src##*/}; base=${name%%.native.log*}
