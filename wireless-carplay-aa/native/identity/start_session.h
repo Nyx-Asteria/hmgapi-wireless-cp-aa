@@ -155,10 +155,10 @@ static int start_configure(const unsigned char *msg,u32 len){
     }
     int sent=0,received=0;
     for(u32 i=0;i<24;i++){
-        if(root_table[i].id==6 && root_table[i].length)sent=1;
-        if(root_table[i].id==7 && root_table[i].length)received=1;
+        if(root_table[i].id==6 && root_table[i].length)sent++;
+        if(root_table[i].id==7 && root_table[i].length)received++;
     }
-    if(!sent || !received){unlock_mutex(&identity_mutex);return -20;}
+    if(sent!=1 || received!=1){unlock_mutex(&identity_mutex);return -20;}
     StartHandler *h=&handlers[33];
     /* Same verified stock duplicate 0x5202 slot as the bundled original.
        Never overwrite an unknown handler or a foreign extension. */

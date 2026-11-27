@@ -304,6 +304,20 @@ int test_main(void){
     raw_builder=fallback_build;lock_mutex=mutex_fail;
     if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)result|=1;
     raw_builder=build;lock_mutex=mutex;
+    // Ambiguous capability tables must not arm the optional session handler.
+    static StartHandler fixture_handlers[34];
+    static const unsigned char valid_empty[]={0x40,0x40,0,6,0x43,1};
+    handlers=fixture_handlers;
+    fixture_handlers[32].id=fixture_handlers[33].id=0x5202;
+    root[3]=parameter(6,12);root[3].length=(u32)fixture_blob;
+    root[4]=parameter(7,12);root[4].length=(u32)fixture_blob;
+    root[5]=root[3];
+    if(start_configure(valid_empty,sizeof(valid_empty))!=-20 || start_len || fixture_handlers[33].id!=0x5202)result|=1;
+    root[5]=root[4];
+    if(start_configure(valid_empty,sizeof(valid_empty))!=-20 || start_len || fixture_handlers[33].id!=0x5202)result|=1;
+    root[5]=(Param){0};
+    if(start_configure(valid_empty,sizeof(valid_empty))!=0 || start_len!=6 || fixture_handlers[33].id!=AVAILABILITY)result|=1;
+    start_clear_locked();
     // Exercise both wrapped callbacks through a real matching builder.
     root[3]=parameter(6,12);root[3].length=(u32)fixture_blob;
     root[4]=parameter(7,12);root[4].length=(u32)fixture_blob;
