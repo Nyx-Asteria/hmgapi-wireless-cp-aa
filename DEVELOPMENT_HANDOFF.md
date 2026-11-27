@@ -201,6 +201,9 @@ Parent 98992e6dad4c27f45a0f392f5db5088fbf626175. Reopened actual extracted metad
 ## Independent FileTransfer cycle — daemon sender lifecycle
 Parent 8c8e55733a1c1924e3ce3db86399c9ece276a2cb. Directly reopened extracted daemon strings and CarKit/AirPlaySender metadata. Confirmed typed sender/receiver properties, lifecycle selectors and separate acceptance/closed/timeout/encoding outcomes, plus exact capability string locations in both frameworks. No new transport mapping; transport estimate 75%, protocol 45%, experiments 0%, primary 100%. Prior CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46074107789"}]. No CPUL changes or release.
 
+## Independent FileTransfer cycle — confirmed phone-side update channel
+Parent 9f77742d83118db956d6e81f96b78c83118383db. Actual chained-fixup/ObjC method decoding and ARM64 disassembly of carkitd establishes the supportsFileTransfer gate, CarPlayUpdateData channel construction, CRFileSender ownership and staged cluster asset send. See docs/cpul-theme-transport-handoff.md for exact source hash and addresses. Transport research estimate 85% (phone channel confirmed, wire/receiver mapping outstanding), protocol 45%, experiments 0%, primary API v3 100%. Prior CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46074570486"}]. No CPUL code edits, no runtime patches or release.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
