@@ -134,6 +134,7 @@ public final class SessionExporter {
         if (target.isFile() && Arrays.equals(expected, digest(target))) {
             guard.check();
             if (part.exists() && !part.delete()) throw new IOException("cannot remove stale partial");
+            complete(target, expected, guard);
             return;
         }
         if (target.exists()) throw new IOException("destination conflict: " + target.getName());
@@ -160,10 +161,53 @@ public final class SessionExporter {
             guard.check();
             if (target.exists() || !part.renameTo(target)) throw new IOException("cannot publish journal");
             published = true;
+            complete(target, expected, guard);
             System.out.println("Verified export: " + target.getName());
         } finally {
             if (!published) {
                 try { guard.check(); part.delete(); } catch (IOException ignored) { /* Never clean up on a different mount. */ }
+            }
+        }
+    }
+
+    /** Publish a per-file manifest only after the final USB file has been verified. */
+    private static void complete(File target, byte[] hash, Guard guard) throws Exception {
+        guard.check();
+        File dest = target.getParentFile();
+        File marker = child(dest, target.getName() + ".complete");
+        File part = child(dest, target.getName() + ".complete.part");
+        StringBuilder hex = new StringBuilder();
+        for (byte b : hash) {
+            int v = b & 255;
+            hex.append(Character.forDigit(v >>> 4, 16)).append(Character.forDigit(v & 15, 16));
+        }
+        if (!Arrays.equals(hash, digest(target))) throw new IOException("published journal verification failed");
+        byte[] manifest = ("SHA256 " + hex + "\nBYTES " + target.length()
+                + "\nFILE " + target.getName() + "\n").getBytes("UTF-8");
+        byte[] expected = MessageDigest.getInstance("SHA-256").digest(manifest);
+        guard.check();
+        if (marker.isFile() && marker.length() == manifest.length && Arrays.equals(expected, digest(marker))) {
+            if (part.exists() && !part.delete()) throw new IOException("cannot clear stale manifest partial");
+            return;
+        }
+        if (marker.exists()) throw new IOException("completion marker conflict: " + marker.getName());
+        if (part.exists() && !part.delete()) throw new IOException("cannot clear manifest partial");
+        boolean published = false;
+        try {
+            guard.check();
+            try (FileOutputStream out = new FileOutputStream(part)) {
+                out.write(manifest);
+                out.getFD().sync();
+            }
+            guard.check();
+            if (!Arrays.equals(expected, digest(part)) || !Arrays.equals(hash, digest(target)))
+                throw new IOException("completion verification failed");
+            guard.check();
+            if (marker.exists() || !part.renameTo(marker)) throw new IOException("cannot publish completion marker");
+            published = true;
+        } finally {
+            if (!published) {
+                try { guard.check(); part.delete(); } catch (IOException ignored) {}
             }
         }
     }
