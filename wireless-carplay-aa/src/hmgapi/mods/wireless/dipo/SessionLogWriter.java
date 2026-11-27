@@ -32,7 +32,9 @@ final class SessionLogWriter {
     private volatile String exportFailure;
     String exportFailure() { return exportFailure; }
     private final ArrayBlockingQueue<Event> queue = new ArrayBlockingQueue<Event>(MAX_QUEUE);
-    private final AtomicLong lost = new AtomicLong();
+    private AtomicLong admittedDrops;
+    private long admittedGeneration;
+    private AtomicLong activeDrops = new AtomicLong();
     private final Thread worker;
     private volatile String failure;
     private volatile boolean closed;
@@ -53,6 +55,7 @@ final class SessionLogWriter {
         final String text;
         final boolean important;
         SessionLogPolicy.Category category;
+        AtomicLong drops;
         Event(int kind, long time, long generation, String text, boolean important) {
             this.kind=kind; this.time=time; this.generation=generation; this.text=text; this.important=important;
         }
@@ -93,25 +96,28 @@ final class SessionLogWriter {
     }
     // Reserve capacity for lifecycle and error events. On overload evict ordinary messages first.
     private synchronized void offer(Event e) {
-        if(closed) return;
-        if(!e.important && queue.remainingCapacity() <= 128) { lost.incrementAndGet(); return; }
-        if(queue.offer(e)) return;
-        if(e.important) {
-            for(Event old:queue) if(old.kind==0 && !old.important && queue.remove(old)) {
-                lost.incrementAndGet();
-                if(queue.offer(e)) return;
-                break;
+        if(closed)return;
+        if(e.kind==1){
+            // Reserve one end slot for every admitted generation; no unbounded lifecycle backlog.
+            if(admittedDrops!=null || queue.remainingCapacity()<2){
+                failure="session start rejected: lifecycle backlog";return;
             }
-            if(e.kind!=0) {
-                for(Event old:queue) if(old.kind==0 && queue.remove(old)) {
-                    lost.incrementAndGet();
-                    if(queue.offer(e)) return;
-                    break;
-                }
-            }
+            admittedGeneration=e.generation;
+            admittedDrops=new AtomicLong();
+            e.drops=admittedDrops;
+            if(!queue.offer(e)){admittedDrops=null;failure="session start admission failed";}
+            return;
         }
-        lost.incrementAndGet();
-        if(e.kind!=0) failure="session lifecycle queue exhausted";
+        if(admittedDrops==null || admittedGeneration!=e.generation)return;
+        e.drops=admittedDrops;
+        if(e.kind==2){
+            if(!queue.offer(e))failure="reserved session end admission failed";
+            admittedDrops=null;
+            return;
+        }
+        int reserve=e.important?1:128;
+        if(queue.remainingCapacity()<=reserve){e.drops.incrementAndGet();return;}
+        if(!queue.offer(e))e.drops.incrementAndGet();
     }
     synchronized void shutdown() { closed=true; requestExport(); }
     boolean await(long millis) throws InterruptedException { worker.join(millis); return !worker.isAlive(); }
@@ -119,7 +125,7 @@ final class SessionLogWriter {
         long last=androidIndependentMonotonic();
         try {
             ensureDir(root);
-            recover(root);
+            try { recover(root); } catch(IOException ex) { failure=ex.getMessage(); }
             spoolReady=true;
             requestExport();
             try { prune(false); } catch(IOException ex) { failure=ex.getMessage(); }
@@ -150,10 +156,11 @@ final class SessionLogWriter {
     }
     private static long androidIndependentMonotonic(){ return System.nanoTime()/1000000L; }
     private void begin(Event e) throws IOException {
-        recover(root);
+        try { recover(root); } catch(IOException ex) { failure=ex.getMessage(); }
         prune(true);
         milestones.clear(); eventCounts.clear(); warningCount=errorCount=0;
         firstEventAt=lastEventAt=e.time;
+        activeDrops=e.drops;
         start=e.time; generation=e.generation; written=0; errorBytes=0; diagnosticBytes=0; suppressed=0;
         currentId=new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss",Locale.US).format(new Date(start))
             +"_session-"+generation+"_"+UUID.randomUUID().toString();
@@ -213,7 +220,7 @@ final class SessionLogWriter {
         FileOutputStream out=new FileOutputStream(new File(folder,"summary.txt"),true);
         try {
             out.write(("end_ms="+end+"\nduration_ms="+Math.max(0,end-start)+"\ntermination="+reason+
-                "\nqueue_dropped="+lost.getAndSet(0)+"\nsize_dropped="+suppressed+"\n").getBytes("UTF-8"));
+                "\nqueue_dropped="+activeDrops.get()+"\nsize_dropped="+suppressed+"\n").getBytes("UTF-8"));
             out.write(("first_event_ms="+firstEventAt+"\nlast_event_ms="+lastEventAt+"\nwarning_count="+warningCount+"\nerror_count="+errorCount+"\n").getBytes("UTF-8"));
             for(Map.Entry<SessionLogPolicy.Category,Long> item:eventCounts.entrySet())out.write(("events_"+item.getKey().name().toLowerCase(Locale.US)+"="+item.getValue()+"\n").getBytes("UTF-8"));
             for(Map.Entry<String,String> item:milestones.entrySet())out.write((item.getKey()+"="+item.getValue()+"\n").getBytes("UTF-8"));
@@ -272,14 +279,28 @@ final class SessionLogWriter {
     }
     static void recover(File root) throws IOException {
         File[] files=root.listFiles();
-        if(files==null) return;
+        if(files==null)return;
+        IOException failure=null;
         for(File f:files) if(f.isDirectory() && f.getName().endsWith(".open")) {
-            FileOutputStream out=new FileOutputStream(new File(f,"summary.txt"),true);
-            try { out.write("\ntermination=unknown; recovered unfinished session\n".getBytes("UTF-8")); out.getFD().sync(); }
-            finally { out.close(); }
-            File target=new File(root,f.getName().substring(0,f.getName().length()-5));
-            if(target.exists() || !f.renameTo(target)) throw new IOException("recovery rename failed");
+            try {
+                File target=new File(root,f.getName().substring(0,f.getName().length()-5));
+                if(target.exists())throw new IOException("recovery destination conflict");
+                for(String name:new String[]{"session.log","errors.log"}){
+                    File payload=new File(f,name);
+                    if(!payload.exists())writeText(payload,"");
+                }
+                File summary=new File(f,"summary.txt");
+                // Bounded recovery annotation, even if repeated rename attempts fail.
+                if(summary.length()<32768){
+                    try(FileOutputStream out=new FileOutputStream(summary,true)){
+                        out.write("\ntermination=unknown; recovered unfinished session\n".getBytes("UTF-8"));
+                        out.getFD().sync();
+                    }
+                }
+                if(!f.renameTo(target))throw new IOException("recovery rename failed");
+            }catch(IOException ex){if(failure==null)failure=ex;}
         }
+        if(failure!=null)throw failure;
     }
     private void prune(boolean reserve) throws IOException {
         synchronized(spoolLock) {
