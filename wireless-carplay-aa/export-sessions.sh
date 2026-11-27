@@ -57,6 +57,13 @@ while true; do
         [ -z "$current" ] || start_native "$current"
         prune_native
     fi
+    # Recover a dead collector while its opted-in session remains active.
+    if [ -n "$current" ] && [ "$current" = "$native_session" ] &&
+        [ -n "$native_pid" ] && ! kill -0 "$native_pid" 2>/dev/null; then
+        wait "$native_pid" 2>/dev/null
+        native_pid=
+        start_native "$current"
+    fi
     for root in /storage/usb0 /storage/usb1 /storage/usb2; do
         [ -d "$root" ] || continue
         # Require a mounted volume, not an empty internal mountpoint.
