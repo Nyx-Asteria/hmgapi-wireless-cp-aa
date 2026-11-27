@@ -6,7 +6,7 @@ Update this file in every development commit, together with the code; preserve t
 WCP parent fcf00a245edb0168ff74780234b4d142edbe83f5 (CI passed: https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46055754533).
 STBT checkpoint 6233b8f3582966b15c35926630a370cff2442082 (snapshot publication/interrupted USB recovery tests; CI not checked here).
 Logging complete off-car per prior tracker, preserve persistent session-end USB exports, categorized diagnostics, SHA-256 fallback, recovery, bounded retention.
-Shared identity 77% implementation/research estimate after verified prior CI: vehicle/K5 profile 100% implementation (verified existing opt-in registration and native gasoline/EV fixtures; cross-project audit pending), shared API/CPUL readiness 99%, StartSession 98%, theme identity 99%, FileTransfer v2 40% research, diagnostics/validation 97%. Estimates, not test coverage. Integration/audit, final consolidation and signed publication 0%.
+Shared identity 77% implementation/research estimate after verified prior CI: vehicle/K5 profile 100% implementation (verified existing opt-in registration and native gasoline/EV fixtures; cross-project audit pending), shared API/CPUL readiness 99%, StartSession 98%, theme identity 99%, FileTransfer v2 45% research, diagnostics/validation 97%. Estimates, not test coverage. Integration/audit, final consolidation and signed publication 0%.
 API v3 native construction evidence is present; advertisement means builder evidence, not phone acceptance. Reconfiguration invalidates evidence.
 
 ## Current WCP change (previous cycle c134bf2)
@@ -138,8 +138,11 @@ Parent a8342a28f3787fab534394a5afb6f982b7cf5a18. Immediate invalidation and boun
 ## Previous cycle f5d076d — end-to-end StartSession builder regression
 Parent cdc7acb8b42605bdd79cc4efa025be2c09287329. Extend the ARM harness to drive actual root parameter 6/7 wrapper installation through identity_builder and test both sizing and write callbacks in the same fixture. Assert exact lengths, final capability IDs, both bits on successful output, no bits on failed builder or sizing-only invocation. Zero probe scratch to prevent reading uninitialized stack bytes if an OEM callback reports success without populating its buffer. No protocol changes; actual OEM repeatability still unverified. Earlier gate fallback, prerequisite and coherent snapshot CI running at inspection (46064401701, 46064493172, 46064647884). New CI pending. Shared identity estimate remains 77% pending FileTransfer and firmware evidence; no CPUL changes or releases.
 
-## Current cycle — reject ambiguous StartSession capability ownership
+## Previous cycle efef05f — reject ambiguous StartSession capability ownership
 Parent f5d076dc2e4c31110e00b7ce8d92174c6ac80b82. Require exactly one usable callback for each root capability list before installing the optional handler. ARM fixtures verify duplicate sent/received callback rejection without touching the stock handler, and successful installation with one callback per direction. Gate fallback CI passed (46064401701); other recent CI running at inspection. Reopened FileTransfer research notes and searched Library for exact historical archives; no matching archives returned, so historical disassembly not independently revalidated and no speculative FTv2 implementation enabled. Research notes updated with explicit evidence access limitation. Overall estimate held at 77%; no CPUL edits or releases. New CI pending.
+
+## Current cycle — reopened firmware and metadata evidence
+Parent efef05fc666dd05f2fb074ae3dfd794196b6e0fc. User supplied original and incremental archives again. Reopened exact ZIP entries, independently verified native library hashes, inspected actual Thumb receive entry and ELF checksum symbols; targeted original metadata scan returned no version/checksum/v2 matches. See docs/filetransfer-v2-research.md for scope. FileTransfer evidence access blocker removed; protocol semantics not yet established. No runtime edits or release. Overall 77% held, research 45% estimate; no CPUL edits.
 
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
