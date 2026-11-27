@@ -146,6 +146,29 @@ static int bind(void){
     start_bind(lib); /* optional, no change to stock identification if unavailable */
     return 0;
 }
+/* Mirror the public Java tuple contract at the native boundary.
+ * Parse decimal uint32 without overflow or accepting noncanonical leading zeroes. */
+static int theme_char(char ch,int dot){
+    return (ch>='A' && ch<='Z') || (ch>='a' && ch<='z')
+        || (ch>='0' && ch<='9') || ch=='-' || ch=='_' || (dot && ch=='.');
+}
+static int theme_tuple_ok(const char *s,u32 n){
+    if(!s || !n || n>96)return 0;
+    u32 i=0;
+    while(i<n && s[i]!=':'){if(!theme_char(s[i],0))return 0;i++;}
+    if(!i || i>64 || i==n)return 0;
+    u32 begin=++i,version=0;
+    while(i<n && s[i]!=':'){
+        if(s[i]<'0' || s[i]>'9')return 0;
+        u32 digit=(u32)(s[i]-'0');
+        if(version>429496729U || (version==429496729U && digit>5))return 0;
+        version=version*10+digit;i++;
+    }
+    if(i==begin || i==n || (i-begin>1 && s[begin]=='0'))return 0;
+    begin=++i;
+    while(i<n){if(!theme_char(s[i],1))return 0;i++;}
+    return i>begin && i-begin<=24;
+}
 static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len,int legacy){
     if(!hook_mailbox){int rc=bind();if(rc)return rc;}
     int vehicle=len!=0,themed=theme_len!=0;
@@ -155,8 +178,7 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     if(ev && (dc_type<0 || dc_type>1 || ac_type!=2 || !dc || dc>1000000 || !ac || ac>1000000))return -12;
     if(vehicle && !ev && (dc_type!=-1 || ac_type!=-1 || dc || ac))return -12;
     if(themed){
-        if(!wireless_lookup || !string_ok(theme_id,theme_len) || theme_len>96)return wireless_lookup?-12:-18;
-        for(u32 i=0;i<theme_len;i++)if(theme_id[i]<0x21 || theme_id[i]>0x7e)return -12;
+        if(!wireless_lookup || !theme_tuple_ok(theme_id,theme_len))return wireless_lookup?-12:-18;
     }
     if(lock_mutex(&identity_mutex))return -15;
     start_clear_locked();

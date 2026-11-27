@@ -133,6 +133,17 @@ int test_main(void){
     if(children!=stock_wireless || child_count!=WIRELESS_MAX+1 || theme_children_active
        || wireless_value(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
     stock_wireless_count=2;
+    // Native tuple parser mirrors the Java API, including uint32 bounds.
+    if(!theme_tuple_ok("THEME1:985:19.0",15)
+       || !theme_tuple_ok("A:4294967295:1",14)
+       || !theme_tuple_ok("A:0:1",5)
+       || theme_tuple_ok("A:4294967296:1",14)
+       || theme_tuple_ok("A:01:1",6)
+       || theme_tuple_ok("A::1",4)
+       || theme_tuple_ok(":1:1",4)
+       || theme_tuple_ok("A:1:",4)
+       || theme_tuple_ok("A.B:1:1",7)
+       || theme_tuple_ok("A:1:1:2",7))result|=1;
     /* Rejecting malformed replacements must erase the old native payload. */
     static const unsigned char invalid[]={0x40,0x40,0,6,0x43,0};
     start_len=6;for(u32 i=0;i<6;i++)start_msg[i]=0x55;
