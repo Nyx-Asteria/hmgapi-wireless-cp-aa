@@ -148,6 +148,8 @@ with tempfile.TemporaryDirectory(prefix="cn7npe-wireless-test-") as temporary:
         assert snapshot(root / "system") == before
     print("ok    CN7NPE: other regions, firmware, builds and models refused before writes")
 
+    # Hardware and converter guards belong to the enabled wireless/audio parts.
+    write(data / "settings/wireless-carplay-aa.json", '{"bridge": true}\n')
     (root / "sys/bus/sdio/devices/mmc1:0001:1").rmdir()
     marker = data / "public/wifi-chip"
     if marker.exists():
