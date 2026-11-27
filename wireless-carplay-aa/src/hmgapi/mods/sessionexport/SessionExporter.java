@@ -168,9 +168,12 @@ public final class SessionExporter {
         if (target.isFile() && Arrays.equals(expected, digest(target))) {
             guard.check();
             if (part.exists() && !part.delete()) throw new IOException("cannot remove stale partial");
-            complete(target, expected, guard);
+            complete(target, expected, guard, true);
             return;
         }
+        // A known completion marker is no longer valid if its payload is missing or changed.
+        // Preserve the old marker as evidence; never overwrite the conflicting payload.
+        retireKnownMarker(source, target, expected, guard);
         if (target.exists()) throw new IOException("destination conflict: " + target.getName());
         if (dest.getUsableSpace() < source.length() + 65536) throw new IOException("USB space low");
         guard.check();
@@ -185,6 +188,7 @@ public final class SessionExporter {
                 while ((n = in.read(buffer)) != -1) {
                     total += n;
                     if (total > MAX_BYTES) throw new IOException("journal grew during copy");
+                    guard.check();
                     out.write(buffer, 0, n);
                 }
                 out.getFD().sync();
@@ -195,7 +199,7 @@ public final class SessionExporter {
             guard.check();
             if (target.exists() || !part.renameTo(target)) throw new IOException("cannot publish journal");
             published = true;
-            complete(target, expected, guard);
+            complete(target, expected, guard, false);
             System.out.println("Verified export: " + target.getName());
         } finally {
             if (!published) {
@@ -204,20 +208,43 @@ public final class SessionExporter {
         }
     }
 
-    /** Publish a per-file manifest only after the final USB file has been verified. */
-    private static void complete(File target, byte[] hash, Guard guard) throws Exception {
-        guard.check();
+    private static void retireKnownMarker(File source, File target, byte[] hash, Guard guard) throws Exception {
         File dest = target.getParentFile();
         File marker = child(dest, target.getName() + ".complete");
-        File part = child(dest, target.getName() + ".complete.part");
+        byte[] known = manifestBytes(target.getName(), source.length(), hash);
+        if (!marker.isFile() || marker.length() != known.length ||
+                !Arrays.equals(MessageDigest.getInstance("SHA-256").digest(known), digest(marker))) return;
+        File invalid = child(dest, target.getName() + ".complete.invalid");
+        guard.check();
+        // If an earlier invalidation already exists, preserve both markers rather than overwrite evidence.
+        if (invalid.exists()) {
+            if (!invalid.isFile() || !Arrays.equals(digest(marker), digest(invalid)))
+                throw new IOException("invalid marker conflict: " + invalid.getName());
+            guard.check();
+            if (!marker.delete()) throw new IOException("cannot retire stale marker");
+        } else {
+            guard.check();
+            if (!marker.renameTo(invalid)) throw new IOException("cannot retire stale marker");
+        }
+    }
+
+    private static byte[] manifestBytes(String name, long length, byte[] hash) throws UnsupportedEncodingException {
         StringBuilder hex = new StringBuilder();
         for (byte b : hash) {
             int v = b & 255;
             hex.append(Character.forDigit(v >>> 4, 16)).append(Character.forDigit(v & 15, 16));
         }
-        if (!Arrays.equals(hash, digest(target))) throw new IOException("published journal verification failed");
-        byte[] manifest = ("SHA256 " + hex + "\nBYTES " + target.length()
-                + "\nFILE " + target.getName() + "\n").getBytes("UTF-8");
+        return ("SHA256 " + hex + "\nBYTES " + length + "\nFILE " + name + "\n").getBytes("UTF-8");
+    }
+
+    /** Publish a per-file manifest only after the final USB file has been verified. */
+    private static void complete(File target, byte[] hash, Guard guard, boolean alreadyVerified) throws Exception {
+        guard.check();
+        File dest = target.getParentFile();
+        File marker = child(dest, target.getName() + ".complete");
+        File part = child(dest, target.getName() + ".complete.part");
+        if (!alreadyVerified && !Arrays.equals(hash, digest(target))) throw new IOException("published journal verification failed");
+        byte[] manifest = manifestBytes(target.getName(), target.length(), hash);
         byte[] expected = MessageDigest.getInstance("SHA-256").digest(manifest);
         guard.check();
         if (marker.isFile() && marker.length() == manifest.length && Arrays.equals(expected, digest(marker))) {

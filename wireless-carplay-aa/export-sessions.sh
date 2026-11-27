@@ -65,6 +65,7 @@ while true; do
     current=
     for marker in "$source_dir"/session-*.native-enabled; do
         [ -f "$marker" ] && [ ! -L "$marker" ] || continue
+        [ "$(cat "$marker" 2>/dev/null)" = enabled ] || continue
         base=${marker##*/}; base=${base%.native-enabled}
         [ -f "$source_dir/$base.active" ] && current=$base
     done
