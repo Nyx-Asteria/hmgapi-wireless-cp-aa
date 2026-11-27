@@ -128,7 +128,7 @@ final class IdentityInstaller {
     private static synchronized void refreshStart(ModContext mod, LoadedApp app, IdentityRegistry registry) {
         if (!loaded || !armed) return;
         CarPlayIdentification.ThemeIdentity theme = registry.theme();
-        if (!mod.enabled() || theme == null || !registry.themeSessionStart()) {
+        if (!mod.enabled() || !mod.settingBoolean("bridge", true) || theme == null || !registry.themeSessionStart()) {
             if (lastStart != null) clearStart();
             notice(mod, "extension not requested");
             return;

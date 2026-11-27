@@ -209,18 +209,17 @@ def transaction_and_network(temp, sdk):
     require("prop/persist.ium.support=carplay" in (unit.root / "settings.txt").read_text(),
             "projection property is applied")
     # The keeper itself runs anyway: HMG-API keeps mods off cellular (its own HMGAPI_CELL chain).
-    require(not unit.state("net.rules"), "default settings create no firewall rule")
-
-    unit.settings(aa_firewall=True)
+    require("40515" not in unit.state("net.rules") and len(unit.state("net.rules").splitlines()) >= 69,
+            "default settings install CarPlay hotspot rules only")
+    unit.settings(bridge=True, cp_firewall=False, aa_firewall=True, audio=False)
     plan = unit.engine("plan")
-    require("40515" in plan and "allow_network" not in plan,
-            "opt-in plan needs no permission for other networks", plan)
+    require("40515" not in plan and "allow_network" not in plan,
+            "legacy settings cannot enable AA firewall or disable CarPlay firewall", plan)
     unit.engine("apply")
-    require(unit.state("net.rules") == AA_RULES,
-            "opt-in emits only hotspot IPv4 TCP 40515 NEW ingress", unit.state("net.rules"))
     fw = Firewall(unit)
     fw.once()
-    fw.aa_installed()
+    require(len(fw.read()["4/filter/HMGAPI_IN"]) == 32 and len(fw.read()["6/filter/HMGAPI_IN"]) == 37,
+            "CarPlay firewall rules remain enabled with legacy settings")
     # The stock firewall may insert a dropping jump again after Wi-Fi restarts.
     fw.ipt("-I", "INPUT", "1", "-i", "wlan0", "-j", "DROP")
     fw.once()
@@ -228,7 +227,7 @@ def transaction_and_network(temp, sdk):
             "keeper repairs ordering when stock adds a drop before its jump")
     fw.ipt("-D", "INPUT", "-i", "wlan0", "-j", "DROP")
 
-    unit.settings(aa_firewall=False)
+    unit.settings(bridge=False, cp_firewall=True, aa_firewall=True)
     unit.engine("apply")
     require(not unit.state("net.rules") and "hmgapi net " in unit.state("services.txt"),
             "toggle off schedules removal of the previously applied rule")
@@ -238,10 +237,10 @@ def transaction_and_network(temp, sdk):
     # The keeper stays (HMG-API's own cellular block); none of this mod's rules do.
     require(not unit.state("net.rules"), "no firewall rule left after cleanup")
 
-    unit.settings(aa_firewall=True)
+    unit.settings(bridge=True)
     unit.engine("apply")
     fw.once()
-    fw.aa_installed()
+    require(len(fw.read()["4/filter/HMGAPI_IN"]) == 32, "CarPlay rules reinstalled")
     (unit.mod / ".disabled").touch()
     unit.engine("apply")
     fw.once()
@@ -253,22 +252,22 @@ def transaction_and_network(temp, sdk):
     require(not (unit.root / "settings.txt").read_text(), "disabling restores original properties")
 
     (unit.mod / ".disabled").unlink()
-    unit.settings(aa_firewall=False)
+    unit.settings(bridge=False, cp_firewall=True, aa_firewall=True)
     unit.engine("apply")
     unit.engine("restore")
     require(snapshot(unit.root / "system") == before, "explicit restore returns every original /system byte")
     require(not (unit.root / "settings.txt").read_text(), "explicit restore returns original properties")
 
     # Removing this mod's rule must leave another enabled mod's owned rule.
-    unit.settings(aa_firewall=True)
+    unit.settings(bridge=True)
     write(unit.data / "mods/other/mod.json", json.dumps({
         "id": "other", "version": "1.0.0", "network": {"rules": [{
             "chain": "input", "in": "hotspot", "ip": 4,
             "proto": "tcp", "ports": [7000], "action": "accept"}]}}))
     unit.engine("apply")
     fw.once()
-    require(len(fw.read()["4/filter/HMGAPI_IN"]) == 2,
-            "AA rule coexists with another mod's owned rule")
+    require(len(fw.read()["4/filter/HMGAPI_IN"]) == 33,
+            "CarPlay rules coexist with another mod's owned rule")
     (unit.mod / ".disabled").touch()
     unit.engine("apply")
     fw.once()
@@ -302,13 +301,13 @@ def existing_car_defaults(temp, sdk):
         unit = Unit(temp / product, sdk, product)
         unit.engine("plan")
         unit.engine("publish-state")
-        require(not unit.state("net.rules"),
-                "existing model stays accepted with no default firewall rule: " + product)
+        require("40515" not in unit.state("net.rules") and len(unit.state("net.rules").splitlines()) >= 69,
+                "existing model stays accepted with default CarPlay rules: " + product)
 
 
 def carplay_firewall(temp, sdk):
     unit = Unit(temp / "carplay-firewall", sdk, "CEEV.USA.0000.V015.012.260507")
-    unit.settings(cp_firewall=True)
+    unit.settings(bridge=True, cp_firewall=False)
     plan = unit.engine("plan")
     require("allow_network" not in plan, "CarPlay opt-in plan needs no permission for other networks", plan)
     unit.engine("publish-state")
@@ -326,7 +325,7 @@ def carplay_firewall(temp, sdk):
     require(fw.read()["4/filter/INPUT"][0] == "-j HMGAPI_IN" and len(fw.read()["4/filter/HMGAPI_IN"]) == 32
             and len(fw.read()["6/filter/HMGAPI_IN"]) == 37,
             "CarPlay rules precede the stock whitelist")
-    unit.settings(cp_firewall=False)
+    unit.settings(bridge=False, cp_firewall=True)
     unit.engine("publish-state")
     fw.once()
     fw.restored()

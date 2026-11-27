@@ -2,106 +2,36 @@
   "version": 1,
   "settings": [
     {
-      "key": "tbt",
-      "type": "toggle",
-      "default": true,
-      "title": "Turn-by-turn on the cluster and HUD",
-      "apply": "rebuild",
-      "description": "Android Auto's turns need a known version of the car's Android Auto library; on one the mod doesn't know, they stay off and the car's own navigation keeps the cluster. CarPlay's turns don't depend on it."
-    },
-    {
-      "key": "tbt_standard",
-      "type": "toggle",
-      "default": false,
-      "title": "Turns in the car's own format (AR HUD arrow, distance bar)",
-      "apply": "restart",
-      "description": "Near each maneuver (about 1,500 ft), Android Auto's and CarPlay's turns go to the cluster and HUD as the car's own navigation sends them: turn, U-turn, fork, exit and roundabout types with their angle and the distance bar counting down, which the AR HUD animates; destinations as left, right or ahead; with Android Auto, \"Recalculating...\" during a reroute longer than a second. Off: the projection icons, as before. Checked with Android Auto on a US Ioniq 5 and with CarPlay on a Korean EV6, both with the AR HUD. Takes effect when the head unit restarts."
-    },
-    {
-      "key": "tbt_side_streets",
-      "type": "toggle",
-      "default": false,
-      "title": "CarPlay: the intersection's side streets around the turn arrow",
-      "apply": "restart",
-      "description": "With \"Turns in the car's own format\" on: near a turn, the cluster draws the roads of the intersection around the arrow, as Korean cars' own navigation does, from the junction the iPhone sends (Apple Maps sends it for many city turns; turns without it keep the plain arrow). Android Auto sends no junction shape. Not yet checked on a car: if the AR HUD stops animating turns with it on, turn it off and report it. Takes effect when the head unit restarts."
-    },
-    {
       "key": "bridge",
       "type": "toggle",
       "default": true,
-      "title": "Wireless CarPlay (Bluetooth bridge and Wi-Fi sessions)",
-      "apply": "rebuild"
+      "title": "Enable wireless CarPlay",
+      "apply": "rebuild",
+      "description": "Enable Bluetooth handover, Wi-Fi audio, hotspot-scoped CarPlay firewall rules, Now Playing and Device Connections. Turning this off does not remove global projection feature flags."
     },
     {
       "key": "auto_open",
       "type": "toggle",
       "default": true,
-      "title": "Automatically open wireless CarPlay",
+      "title": "Automatically open CarPlay",
       "apply": "restart",
-      "description": "Bring the stock CarPlay activity to the foreground once after a wireless session starts. Does not delay or retry the connection. Takes effect when the head unit restarts."
+      "description": "Open CarPlay once when a wireless session connects."
     },
     {
-      "key": "shared_identity",
-      "type": "toggle",
-      "default": true,
-      "title": "Shared CarPlay identity",
-      "apply": "restart",
-      "description": "Allow installed mods to contribute vehicle and appearance information to CarPlay's identification message. Takes effect when the head unit restarts."
-    },
-    {
-      "key": "audio",
-      "type": "toggle",
-      "default": true,
-      "title": "CarPlay music and Siri over Wi-Fi (AAC, Opus)",
-      "apply": "rebuild"
-    },
-    {
-      "key": "now_playing",
-      "type": "toggle",
-      "default": true,
-      "title": "Song, artist and album art on wireless CarPlay",
-      "apply": "restart",
-      "description": "A hook in the CarPlay app (no files changed): asks the phone for Now Playing again once wireless CarPlay's session is up, for the cluster, the split screen and album art apps."
-    },
-    {
-      "key": "menu",
-      "type": "toggle",
-      "default": true,
-      "title": "Settings > Phone Projection opens Device Connections",
-      "apply": "restart",
-      "description": "A hook in the Settings app (no files changed). US/Canada only; other regions keep the stock choice."
-    },
-    {
-      "key": "usb_drives",
-      "type": "toggle",
-      "default": true,
-      "apply": "restart",
-      "title": "USB drives and hubs don't start wired Android Auto",
-      "description": "A hook in the Android Auto app (no files changed). Without it, a USB drive can block wireless Android Auto until the head unit restarts."
-    },
-    {
-      "key": "aa_firewall",
+      "key": "tbt",
       "type": "toggle",
       "default": false,
-      "title": "Allow wireless Android Auto through the hotspot firewall",
+      "title": "Integrated turn-by-turn",
       "apply": "rebuild",
-      "description": "Experimental for Ioniq 6 CAN 260206. Allows new IPv4 TCP connections to port 40515 only from the car's hotspot subnet. HMG-API manages the rule and removes it when this setting or the mod is disabled. Leave off on cars that connect without it."
-    },
-    {
-      "key": "cp_firewall",
-      "type": "toggle",
-      "default": false,
-      "title": "Allow wireless CarPlay through the hotspot firewall",
-      "apply": "rebuild",
-      "description": "Needed on the Ioniq 6 USA 260507 and the Elantra N (CN7NPE) USA 260903, whose stock firewalls allow the CarPlay ports only on the wired link. Accepts CarPlay's ports from the hotspot's own addresses, TCP and UDP, as destination or source: 5000-5001, 5020, 5353, 6000-6003, 6011, 6020, 6030 and 7000 on IPv4 and IPv6, 6031 on IPv6, and ICMPv6 (neighbor discovery). HMG-API manages the rules and removes them when this setting or the mod is disabled. Leave off on cars that connect without it."
+      "description": "Enable built-in cluster guidance, stock turn formatting and experimental intersection detail. Leave off with Standalone TBT."
     },
     {
       "key": "carplay_log",
       "type": "toggle",
       "default": false,
-      "title": "CarPlay's own log (troubleshooting)",
+      "title": "Extended session diagnostics",
       "apply": "restart",
-      "description": "For finding out why wireless CarPlay disconnects: the CarPlay system logs each session in detail (as TccCarPlay), so Record a problem or a log capture shows why it ended. Its lines name your phone (model and name). Leave it off unless someone helping you asks for it. Takes effect when the head unit restarts."
+      "description": "Include detailed native CarPlay logs in automatic WCP-LOGS session exports. Basic Java session journals are always collected. Native logs may contain private device information."
     }
   ]
 }

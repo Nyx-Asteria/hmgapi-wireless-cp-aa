@@ -83,7 +83,8 @@ with tempfile.TemporaryDirectory(prefix="cn7npe-wireless-test-") as temporary:
     for library in ("libleafiaaac.so", "libcarplayidentity.so"):
         assert (root / "system/lib" / library).read_bytes() == (MOD / "files" / library).read_bytes()
     rules = data / "state/net.rules"
-    assert not rules.exists() or not rules.read_text().strip()
+    assert rules.exists() and "40515" not in rules.read_text()
+    assert len([line for line in rules.read_text().splitlines() if line.startswith("ipt ")]) == 69
     applied = snapshot(root / "system")
     engine(root, "apply")
     assert snapshot(root / "system") == applied
@@ -99,7 +100,7 @@ with tempfile.TemporaryDirectory(prefix="cn7npe-wireless-test-") as temporary:
             for port in ports[family]}
     expected["6/filter/HMGAPI_IN"].add("-i wlan0 -s fe80::/10 -p icmpv6 -j ACCEPT")
     firewall = Firewall(SimpleNamespace(root=root, data=data))
-    write(data / "settings/wireless-carplay-aa.json", '{"cp_firewall": true}\n')
+    write(data / "settings/wireless-carplay-aa.json", '{"bridge": true, "cp_firewall": false, "aa_firewall": true}\n')
     plan = engine(root, "plan")
     assert "left out" not in plan and "allow_network" not in plan
     engine(root, "apply")
@@ -118,11 +119,11 @@ with tempfile.TemporaryDirectory(prefix="cn7npe-wireless-test-") as temporary:
     firewall.once()
     assert firewall.read()["6/filter/INPUT"][0] == "-j HMGAPI_IN"
     firewall.ipt("-D", "INPUT", "-i", "wlan0", "-j", "DROP", version=6)
-    write(data / "settings/wireless-carplay-aa.json", '{"cp_firewall": false}\n')
+    write(data / "settings/wireless-carplay-aa.json", '{"bridge": false, "cp_firewall": true, "aa_firewall": true}\n')
     engine(root, "apply")
     firewall.once()
     firewall.restored()
-    write(data / "settings/wireless-carplay-aa.json", '{"cp_firewall": true}\n')
+    write(data / "settings/wireless-carplay-aa.json", '{"bridge": true, "cp_firewall": false, "aa_firewall": true}\n')
     engine(root, "apply")
     firewall.once()
     (data / "mods/wireless-carplay-aa/.disabled").touch()
@@ -131,9 +132,9 @@ with tempfile.TemporaryDirectory(prefix="cn7npe-wireless-test-") as temporary:
     firewall.restored()
     assert snapshot(root / "system") == before
     (data / "mods/wireless-carplay-aa/.disabled").unlink()
-    write(data / "settings/wireless-carplay-aa.json", '{"cp_firewall": false}\n')
+    write(data / "settings/wireless-carplay-aa.json", '{"bridge": false, "cp_firewall": true, "aa_firewall": true}\n')
     engine(root, "apply")
-    print("ok    CN7NPE: opt-in CarPlay rules are local, restored after resets and removed on toggle/disable")
+    print("ok    CN7NPE: consolidated CarPlay rules are local, restored after resets and removed on toggle/disable")
 
     engine(root, "restore")
     assert snapshot(root / "system") == before
@@ -147,6 +148,8 @@ with tempfile.TemporaryDirectory(prefix="cn7npe-wireless-test-") as temporary:
         assert snapshot(root / "system") == before
     print("ok    CN7NPE: other regions, firmware, builds and models refused before writes")
 
+    # Hardware and converter guards belong to the enabled wireless/audio parts.
+    write(data / "settings/wireless-carplay-aa.json", '{"bridge": true}\n')
     (root / "sys/bus/sdio/devices/mmc1:0001:1").rmdir()
     marker = data / "public/wifi-chip"
     if marker.exists():
