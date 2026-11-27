@@ -23,3 +23,19 @@ jobs:
 
   mod:
     uses: Open-HMG/HMG-API/.github/workflows/mod.yml@a1830a83a8ad4bf3377be32e9064c5018947a2f6
+
+  journal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Production session journal regression
+        run: python3 wireless-carplay-aa/tests/session_journal_test.py
+
+      - name: Native session USB export regression
+        run: python3 wireless-carplay-aa/tests/session_export_test.py

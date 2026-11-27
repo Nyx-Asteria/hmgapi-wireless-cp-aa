@@ -19,6 +19,7 @@ final class SessionJournal {
     private final AtomicInteger queued = new AtomicInteger(), dropped = new AtomicInteger();
     private File active;
     private String header;
+    private boolean writeFailed;
     private volatile boolean accepting;
 
     SessionJournal(Context context, String folder) {
@@ -30,8 +31,8 @@ final class SessionJournal {
             if (!dir.isDirectory() && !dir.mkdirs()) return;
             File[] files = dir.listFiles();
             if (files != null) for (File f : files) if (f.getName().endsWith(".active")) {
-                append(f, row("END interrupted process/service restart"), true);
-                f.renameTo(new File(dir, f.getName().replace(".active", "-interrupted.log")));
+                if (append(f, row("END interrupted process/service restart"), true))
+                    f.renameTo(new File(dir, f.getName().replace(".active", "-interrupted.log")));
             }
             prune();
         }});
@@ -44,8 +45,8 @@ final class SessionJournal {
         worker.post(new Runnable() { public void run() {
             if (!dir.isDirectory() && !dir.mkdirs()) return;
             active = new File(dir, "session-" + wall + "-" + UUID.randomUUID().toString() + ".active");
-            header = wall + "\t" + elapsed + "\tSTART " + detail + "\n";
-            append(active, header, true);
+            header = row("START " + bounded(detail), wall, elapsed);
+            writeFailed = !append(active, header, true);
             if (CarPlayLog.on) {
                 File marker = new File(dir, active.getName().replace(".active", ".native-enabled"));
                 append(marker, "enabled\n".replace("\n", ""), false);
@@ -56,12 +57,13 @@ final class SessionJournal {
     synchronized void record(String message) {
         if (!accepting) return;
         if (queued.incrementAndGet() > QUEUE) { queued.decrementAndGet(); dropped.incrementAndGet(); return; }
-        final String line = row(message);
+        final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
+        final String raw = bounded(message);
         if (!worker.post(new Runnable() { public void run() {
             try { if (active != null) {
                 int lost = dropped.getAndSet(0);
                 if (lost != 0) write(row("LOGGER dropped queued events=" + lost));
-                write(line);
+                write(row(raw, wall, elapsed));
             }} finally { queued.decrementAndGet(); }
         }})) queued.decrementAndGet();
     }
@@ -69,15 +71,20 @@ final class SessionJournal {
     synchronized void end(String reason) {
         if (!accepting) return;
         accepting = false;
-        final String line = row("END " + reason);
+        final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
+        final String raw = bounded("END " + reason);
         worker.post(new Runnable() { public void run() {
             if (active == null) return;
             int lost = dropped.getAndSet(0);
             if (lost != 0) write(row("LOGGER dropped queued events=" + lost));
-            write(line);
+            write(row(raw, wall, elapsed));
             // Sync final bytes before exposing a completed file to the USB exporter.
-            append(active, "", true);
-            File completed = new File(dir, active.getName().replace(".active", ".log"));
+            if (!append(active, "", true)) writeFailed = true;
+            if (writeFailed && !append(active, row("LOGGER incomplete recording: disk write failed"), true)) {
+                active = null;
+                return;
+            }
+            File completed = new File(dir, active.getName().replace(".active", writeFailed ? "-interrupted.log" : ".log"));
             if (active.renameTo(completed)) {
                 new File(dir, active.getName().replace(".active", ".native-enabled")).delete();
             }
@@ -92,24 +99,34 @@ final class SessionJournal {
             // Preserve the header and newest segment; explicitly flag truncation.
             try (FileOutputStream out = new FileOutputStream(active, false)) {
                 out.write((header + row("LOGGER earlier events truncated at 2 MiB limit")).getBytes("UTF-8"));
-            } catch (IOException ignored) { return; }
+            } catch (IOException ignored) { writeFailed = true; return; }
         }
-        append(active, line, false);
+        if (!append(active, line, false)) writeFailed = true;
     }
 
-    private static void append(File file, String line, boolean sync) {
+    private static boolean append(File file, String line, boolean sync) {
         try (FileOutputStream out = new FileOutputStream(file, true)) {
             out.write(line.getBytes("UTF-8"));
             if (sync) out.getFD().sync();
-        } catch (IOException ignored) { }
+        } catch (IOException ignored) { return false; }
+        return true;
+    }
+
+    private static String bounded(String message) {
+        if (message == null) return "";
+        return message.length() > 8192 ? message.substring(0,8192) + " [truncated]" : message;
     }
 
     private static String row(String message) {
+        return row(bounded(message), System.currentTimeMillis(), SystemClock.elapsedRealtime());
+    }
+
+    private static String row(String message, long wall, long elapsed) {
         String clean = message.replace('\n',' ').replace('\r',' ').replace('\t',' ')
             .replaceAll("(?i)(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}", "[MAC]")
             .replaceAll("(?i)(password|passphrase|psk|token|secret|ssid)\\s*[:=]\\s*[^ ,;]+", "$1=[redacted]");
         if (clean.length() > 4096) clean = clean.substring(0,4096) + " [truncated]";
-        return System.currentTimeMillis() + "\t" + SystemClock.elapsedRealtime() + "\t" + clean + "\n";
+        return wall + "\t" + elapsed + "\t" + clean + "\n";
     }
 
     private void prune() {
