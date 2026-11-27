@@ -67,10 +67,12 @@ final class IdentityInstaller {
                 if (p.args.length != 1 || !(p.args[0] instanceof Integer) || ((Integer)p.args[0]) != 4) return;
                 try {
                     if (!armed) apply(mod, app, contributions);
-                    enableGroups(app.classLoader);
                     refreshStart(mod, app, contributions);
-                    mod.log("CarPlayStart: Bluetooth pre-connect preparation complete");
                 } catch (Throwable t) { failure(mod, "CarPlayStart Bluetooth pre-connect", t); }
+                // Stock vehicle groups are independent of the optional session extension.
+                // A missing group hook must not prevent session preparation.
+                try { enableGroups(app.classLoader); }
+                catch (Throwable t) { failure(mod, "CarPlay stock vehicle groups before connect", t); }
             }
         });
         watchStart(mod, app, registry);
