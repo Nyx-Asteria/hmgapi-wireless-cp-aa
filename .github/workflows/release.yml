@@ -128,21 +128,21 @@ jobs:
         if: always()
         run: rm -rf "$RUNNER_TEMP/keys"
 
-      - name: Draft release
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           v=$(python3 -c 'import json; print(json.load(open("wireless-carplay-aa/mod.json"))["version"])')
           tag="v$v"
           notes=".github/release-notes/$tag.md"
-          if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
+          test -s "$notes"; set -- --notes-file "$notes"
           pre=""; case "$tag" in *-*) pre="--prerelease --latest=false" ;; esac   # a pre-release is never "Latest"
-          gh release create "$tag" --draft $pre --target "$GITHUB_SHA" --title "Wireless CarPlay + Android Auto $v" "$@" out/assets/*
+          gh release create "$tag" $pre --target "$GITHUB_SHA" --title "Wireless CarPlay + Android Auto $v" "$@" out/assets/*
           {
-            echo "### Draft release $tag"
+            echo "### Published release $tag"
             case "$v" in
-              *-*) echo "Not published. A pre-release isn't for the catalogue (finals only); a HMG-API pre-release that bundles it pins it with this tools/release-mods.txt line:" ;;
-              *) echo "Not published. Once it is, the catalogue PR in HMG-API (a maintainer's) starts with:" ;;
+              *-*) echo "A pre-release isn't for the catalogue (finals only); a HMG-API pre-release that bundles it pins it with this tools/release-mods.txt line:" ;;
+              *) echo "The catalogue PR in HMG-API (a maintainer's) starts with:" ;;
             esac
             echo '```'
             cat out/catalog-command.txt

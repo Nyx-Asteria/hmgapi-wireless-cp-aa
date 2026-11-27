@@ -20,7 +20,7 @@ static u32 *hook_mailbox;
 static int (*protect_page)(void *,u32,int);
 static Mutex lock_mutex,unlock_mutex;
 static u32 identity_mutex;
-static int configured,has_vehicle,has_theme;
+static int configured,has_vehicle,has_theme,legacy_theme;
 static char display_name[321];
 static char theme[97];
 static u32 dc_w,ac_w,engine=2,connector,dc_connector,ac_connector;
@@ -56,7 +56,7 @@ static void *info_value(u16 id,u16 type,u16 *n,void *key,int *more){
 }
 static void *status_value(u16 id,u16 type,u16 *n,void *key,int *more){return status_lookup(id,type,n,key,more);}
 static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
-    if(id==6){if(more)*more=0;return theme;}
+    if(id==6 || (legacy_theme && id==5)){if(more)*more=0;return theme;}
     return wireless_lookup(id,type,n,key,more);
 }
 #include "start_session.h"
@@ -71,6 +71,11 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
         if(!stock || n>WIRELESS_MAX){*count=(u16)n;return stock;}
         /* LIVI advertises only the asset identifier in transport group 24,
            parameter 6. Preserve stock parameter 5 and avoid duplicate 6. */
+        if(legacy_theme){
+            for(u32 i=0;i<n;i++)wireless_copy[i]=stock[i];
+            wireless_copy[n]=parameter(5,12);wireless_copy[n+1]=parameter(6,10);
+            *count=(u16)(n+2);if(more)*more=0;return wireless_copy;
+        }
         u32 used=0;
         for(u32 i=0;i<n;i++)if(stock[i].id!=6)wireless_copy[used++]=stock[i];
         wireless_copy[used++]=parameter(6,10);
@@ -131,7 +136,7 @@ static int bind(void){
     start_bind(lib); /* optional, no change to stock identification if unavailable */
     return 0;
 }
-static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len){
+static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len,int legacy){
     if(!hook_mailbox){int rc=bind();if(rc)return rc;}
     int vehicle=len!=0,themed=theme_len!=0;
     if(!vehicle && !themed)return -12;
@@ -143,11 +148,11 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     }
     if(lock_mutex(&identity_mutex))return -15;
     start_clear_locked();
-    has_vehicle=vehicle;has_theme=themed;
+    has_vehicle=vehicle;has_theme=themed;legacy_theme=themed && legacy;
     /* API v2 still accepts the complete tuple; identification carries only
        its asset identifier. StartSessionCodec carries version and SDK. */
     u32 asset_len=0;
-    while(asset_len<theme_len && theme_id[asset_len]!=':')asset_len++;
+    while(asset_len<theme_len && (legacy_theme || theme_id[asset_len]!=':'))asset_len++;
     copy(theme,theme_id,asset_len);theme[asset_len]=0;
     if(vehicle){
         copy(display_name,name,len);display_name[len]=0;engine=(u32)engine_type;dc_connector=(u32)dc_type;ac_connector=(u32)ac_type;dc_w=dc;ac_w=ac;
@@ -166,13 +171,13 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     unlock_mutex(&identity_mutex);return result;
 }
 
-JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_configure(JNIEnv *env,jclass cls,jbyteArray name,jint engine_type,jint dc_type,jint dc,jint ac_type,jint ac,jbyteArray theme_id){
+JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_configure(JNIEnv *env,jclass cls,jbyteArray name,jint engine_type,jint dc_type,jint dc,jint ac_type,jint ac,jbyteArray theme_id,jboolean legacy){
     (void)cls;if(!name || !theme_id)return -12;jsize n=(*env)->GetArrayLength(env,name),t=(*env)->GetArrayLength(env,theme_id);
     if(n>320 || t>96)return -12;char bytes[321],theme_bytes[97];
     if(n)(*env)->GetByteArrayRegion(env,name,0,n,(jbyte*)bytes);
     if(t)(*env)->GetByteArrayRegion(env,theme_id,0,t,(jbyte*)theme_bytes);
     if((*env)->ExceptionCheck(env))return -12;
-    return configure(bytes,(u32)n,engine_type,dc_type,(u32)dc,ac_type,(u32)ac,theme_bytes,(u32)t);
+    return configure(bytes,(u32)n,engine_type,dc_type,(u32)dc,ac_type,(u32)ac,theme_bytes,(u32)t,legacy);
 }
 JNIEXPORT void JNICALL Java_hmgapi_mods_wireless_NativeIdentity_shutdown(JNIEnv *env,jclass cls){
     (void)env;(void)cls;__atomic_store_n(&configured,0,__ATOMIC_RELEASE);

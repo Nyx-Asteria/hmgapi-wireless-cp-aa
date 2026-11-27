@@ -94,6 +94,14 @@
       "title": "CarPlay's own log (troubleshooting)",
       "apply": "restart",
       "description": "For finding out why wireless CarPlay disconnects: the CarPlay system logs each session in detail (as TccCarPlay), so Record a problem or a log capture shows why it ended. Its lines name your phone (model and name). Leave it off unless someone helping you asks for it. Takes effect when the head unit restarts."
+    },
+    {
+      "key": "legacy_theme_identity",
+      "type": "toggle",
+      "default": false,
+      "title": "Legacy Ultra theme identity (diagnostic)",
+      "apply": "restart",
+      "description": "Compare the old full theme tuple in iAP2 parameters 5 and 6 with the current asset-ID-only format. Only affects contributed themes; leave off normally."
     }
   ]
 }
