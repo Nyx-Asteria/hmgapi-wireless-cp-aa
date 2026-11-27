@@ -38,6 +38,7 @@ for modern in (False, True):
         logcat.chmod(0o755)
         sleep = binpath / "sleep"
         sleep.write_text("#!/bin/sh\n"
+            + 'if [ "$1" = 1 ]; then /bin/sleep 0.05; exit 0; fi\n'
             + 'n=$(cat "' + str(d / "ticks") + '" 2>/dev/null || echo 0)\n'
             + 'n=$((n+1)); echo "$n" > "' + str(d / "ticks") + '"\n'
             + '/bin/sleep 0.1\n'

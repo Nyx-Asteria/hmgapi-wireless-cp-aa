@@ -7,8 +7,22 @@ native_dir=/data/hmgapi/logs/wcp-native-session
 mkdir -p "$native_dir" || exit 1
 native_pid=
 native_session=
+retry_ticks=0
+retry_delay=1
+healthy_ticks=0
 stop_native() {
-    [ -z "$native_pid" ] || { kill "$native_pid" 2>/dev/null; wait "$native_pid" 2>/dev/null; }
+    if [ -n "$native_pid" ]; then
+        kill "$native_pid" 2>/dev/null
+        remaining=3
+        while kill -0 "$native_pid" 2>/dev/null && [ "$remaining" -gt 0 ]; do
+            sleep 1
+            remaining=$((remaining - 1))
+        done
+        if kill -0 "$native_pid" 2>/dev/null; then
+            kill -KILL "$native_pid" 2>/dev/null
+        fi
+        wait "$native_pid" 2>/dev/null
+    fi
     native_pid=
 }
 trap 'stop_native; exit 0' HUP INT TERM
@@ -24,8 +38,12 @@ prune_native() {
         [ -f "$file" ] || continue
         name=${file##*/}; base=${name%.native.log}
         [ "$base" != "$native_session" ] || continue
-        rm -f "$file" "$file.1" "$file.2" "$file.3" "$native_dir/$base.native-ready"
-        count=$((count - 1))
+        if rm -f "$native_dir/$base.native-ready" "$file.1" "$file.2" "$file.3" "$file" &&
+                [ ! -e "$file" ] && [ ! -e "$file.1" ] && [ ! -e "$file.2" ] && [ ! -e "$file.3" ]; then
+            count=$((count - 1))
+        else
+            echo "Native retention cleanup failed: $base" >&2
+        fi
     done
 }
 # Prefer a short historical tail when supported; older Android logcat lacks -T.
@@ -53,15 +71,36 @@ while true; do
     if [ "$current" != "$native_session" ]; then
         stop_native
         native_session=
+        retry_ticks=0
+        retry_delay=1
+        healthy_ticks=0
         [ -z "$current" ] || start_native "$current"
         prune_native
     fi
-    # Recover a dead collector while its opted-in session remains active.
-    if [ -n "$current" ] && [ "$current" = "$native_session" ] &&
-        [ -n "$native_pid" ] && ! kill -0 "$native_pid" 2>/dev/null; then
-        wait "$native_pid" 2>/dev/null
-        native_pid=
-        start_native "$current"
+    # Keep polling the session marker during backoff; never sleep through teardown.
+    if [ -n "$current" ] && [ "$current" = "$native_session" ]; then
+        if [ -n "$native_pid" ]; then
+            if kill -0 "$native_pid" 2>/dev/null; then
+                healthy_ticks=$((healthy_ticks + 1))
+                if [ "$healthy_ticks" -ge 30 ]; then
+                    retry_delay=1
+                    healthy_ticks=30
+                fi
+            else
+                wait "$native_pid" 2>/dev/null
+                native_pid=
+                healthy_ticks=0
+                retry_ticks=$retry_delay
+                retry_delay=$((retry_delay * 2))
+                [ "$retry_delay" -le 30 ] || retry_delay=30
+                echo "Native collector exited; retry in $((retry_ticks * 2)) seconds" >&2
+            fi
+        elif [ "$retry_ticks" -gt 0 ]; then
+            retry_ticks=$((retry_ticks - 1))
+            [ "$retry_ticks" -ne 0 ] || start_native "$current"
+        else
+            start_native "$current"
+        fi
     fi
     # Publish readiness only after logcat has stopped writing the session.
     for file in "$native_dir"/session-*.native.log; do
