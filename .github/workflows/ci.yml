@@ -46,6 +46,12 @@ jobs:
           javac --release 8 -d out/log-policy wireless-carplay-aa/src/hmgapi/mods/wireless/dipo/SessionLogPolicy.java wireless-carplay-aa/src/hmgapi/mods/wireless/dipo/PreSessionEvents.java wireless-carplay-aa/tests/SessionLogPolicyTest.java
           java -cp out/log-policy hmgapi.mods.wireless.dipo.SessionLogPolicyTest
 
+      - name: CPUL-derived directory writer regression
+        run: |
+          mkdir -p out/log-writer
+          javac --release 8 -d out/log-writer wireless-carplay-aa/src/hmgapi/mods/wireless/dipo/SessionLogWriter.java wireless-carplay-aa/src/hmgapi/mods/wireless/dipo/SessionLogPolicy.java wireless-carplay-aa/tests/SessionLogWriterTest.java
+          java -cp out/log-writer hmgapi.mods.wireless.dipo.SessionLogWriterTest
+
       - name: Java session export regression
         run: |
           mkdir -p out/session-export
