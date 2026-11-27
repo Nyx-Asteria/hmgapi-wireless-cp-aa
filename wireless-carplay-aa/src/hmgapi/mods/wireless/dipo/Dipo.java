@@ -83,13 +83,11 @@ public final class Dipo {
 
     static void log(String m) {
         mod.log(m);
-        if (journal != null) journal.record(m);
         if (recording != null) recording.record(m);
     }
 
     static void error(String m, Throwable t) {
         mod.error(m, t);
-        if (journal != null) journal.record(m + " error=" + t.getClass().getSimpleName());
         if (recording != null) recording.error(m + " error=" + t.getClass().getSimpleName());
     }
 
@@ -156,10 +154,11 @@ public final class Dipo {
      */
     private static void journalEvent(String action,String detail) {
         if (journal != null) {
-            if ("beginAttempt".equals(action)) journal.beginAttempt(detail);
-            else if ("start".equals(action)) journal.start(detail);
+            // The legacy journal now carries native capture lifecycle only.
+            // Its marker protocol is still consumed by the root collector.
+            if ("beginAttempt".equals(action) && CarPlayLog.on) journal.beginAttempt(detail);
+            else if ("start".equals(action) && CarPlayLog.on) journal.start(detail);
             else if ("end".equals(action)) journal.end(detail);
-            else journal.record(detail);
         }
         if (recording != null) {
             if ("beginAttempt".equals(action)) recording.beginAttempt(detail);
