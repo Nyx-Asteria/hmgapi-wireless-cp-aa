@@ -25,31 +25,40 @@ final class StartSession {
         }catch(Throwable e){verified=false;}
         return verified;
     }
-    static byte[] build(Context context, ThemeIdentity theme) {
-        if(context==null || theme==null || !verified())return null;
+    enum Blocker { NONE, CONTEXT, THEME, FIRMWARE, RECEIVER_IDENTITY, WIFI_SERVICE, WIFI_CONFIGURATION, WIFI_CREDENTIALS, NETWORK_ADDRESS }
+    static final class Preparation {
+        final byte[] message;
+        final Blocker blocker;
+        Preparation(byte[] message,Blocker blocker){this.message=message;this.blocker=blocker;}
+    }
+    private static Preparation blocked(Blocker blocker){return new Preparation(null,blocker);}
+    static Preparation prepare(Context context, ThemeIdentity theme) {
+        if(context==null)return blocked(Blocker.CONTEXT);
+        if(theme==null)return blocked(Blocker.THEME);
+        if(!verified())return blocked(Blocker.FIRMWARE);
         String pi=null, deviceId=null, sourceVersion=null;
         for(String line:lines(RECEIVER)){
             if(line.startsWith("pi="))pi=line.substring(3);
             else if(line.startsWith("deviceID="))deviceId=line.substring(9);
             else if(line.startsWith("sourceVersion="))sourceVersion=line.substring(14);
         }
-        if(!valid(pi)||!valid(deviceId)||!valid(sourceVersion))return null;
+        if(!valid(pi)||!valid(deviceId)||!valid(sourceVersion))return blocked(Blocker.RECEIVER_IDENTITY);
         Object config;
         try{
             Object wm=context.getSystemService("wifi");
-            if(wm==null)return null;
+            if(wm==null)return blocked(Blocker.WIFI_SERVICE);
             config=wm.getClass().getMethod("getWifiApConfiguration").invoke(wm);
-        }catch(Throwable e){return null;}
-        if(config==null)return null;
+        }catch(Throwable e){return blocked(Blocker.WIFI_CONFIGURATION);}
+        if(config==null)return blocked(Blocker.WIFI_CONFIGURATION);
         String ssid=field(config,"ConnectivitySSID"),psk=field(config,"ConnectivityPSK");
         if(!valid(ssid))ssid=unquote(field(config,"SSID"));
         if(!valid(psk))psk=unquote(field(config,"preSharedKey"));
-        if(!valid(ssid)||!valid(psk))return null;
+        if(!valid(ssid)||!valid(psk))return blocked(Blocker.WIFI_CREDENTIALS);
         List<String> ips=addresses("wlan0");
-        if(ips.isEmpty())return null;
+        if(ips.isEmpty())return blocked(Blocker.NETWORK_ADDRESS);
         int channel=channel(config);
-        return StartSessionCodec.encode(ssid,psk,channel,ips,-1,7000,deviceId,pi,sourceVersion,
-                theme.sdkVersion,theme.assetIdentifier,theme.assetVersion);
+        return new Preparation(StartSessionCodec.encode(ssid,psk,channel,ips,-1,7000,deviceId,pi,sourceVersion,
+                theme.sdkVersion,theme.assetIdentifier,theme.assetVersion),Blocker.NONE);
     }
     private static boolean valid(String s){return s!=null && !s.isEmpty() && s.indexOf(0)<0;}
     private static String field(Object o,String name){

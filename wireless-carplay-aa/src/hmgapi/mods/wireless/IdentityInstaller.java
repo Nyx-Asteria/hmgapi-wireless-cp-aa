@@ -156,10 +156,11 @@ final class IdentityInstaller {
             return;
         }
         try {
-            byte[] msg = StartSession.build(app.context, theme);
+            StartSession.Preparation preparation=StartSession.prepare(app.context, theme);
+            byte[] msg=preparation.message;
             if (msg == null) {
                 if (lastStart != null) clearStart();
-                notice(mod, "waiting for verified K5 receiver and hotspot; stock startup retained");
+                notice(mod, "preparation blocked=" + preparation.blocker.name() + "; stock startup retained");
                 return;
             }
             if (java.util.Arrays.equals(lastStart, msg)) return;
