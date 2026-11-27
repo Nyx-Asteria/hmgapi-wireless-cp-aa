@@ -105,13 +105,26 @@ static void start_bind(void *lib){
     send_packet=dlsym(lib,"iAP2ControlSessionSendPacket");
     handlers=dlsym(lib,"iAP2CtlHandleMsgFuncList");
 }
+/* Check the framing emitted by StartSessionCodec before storing any bytes.
+ * Unknown parameter IDs are permitted; only known container IDs are walked. */
+static int start_params_ok(const unsigned char *p,u32 n,int top){
+    while(n){
+        if(n<4)return 0;
+        u32 size=((u32)p[0]<<8)|p[1],id=((u32)p[2]<<8)|p[3];
+        if(size<4 || size>n)return 0;
+        if(top && (id==1 || id==7) && !start_params_ok(p+4,size-4,0))return 0;
+        p+=size;n-=size;
+    }
+    return 1;
+}
 static int start_configure(const unsigned char *msg,u32 len){
     if(!lock_mutex || !unlock_mutex)return len?-18:0;
     if(lock_mutex(&identity_mutex))return -15;
     // A rejected replacement must not leave a previous session payload armed.
     start_clear_locked();
     if(len>START_MAX || (len && (!msg || len<6 || msg[0]!=0x40 || msg[1]!=0x40
-       || ((u32)msg[2]<<8|msg[3])!=len || msg[4]!=0x43 || msg[5]!=0x01))){
+       || ((u32)msg[2]<<8|msg[3])!=len || msg[4]!=0x43 || msg[5]!=0x01
+       || !start_params_ok(msg+6,len-6,1)))){
         unlock_mutex(&identity_mutex);return -12;
     }
     if(!len){unlock_mutex(&identity_mutex);return 0;}

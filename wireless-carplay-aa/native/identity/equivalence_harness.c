@@ -160,6 +160,23 @@ int test_main(void){
        || theme_tuple_ok("A:1:",4)
        || theme_tuple_ok("A.B:1:1",7)
        || theme_tuple_ok("A:1:1:2",7))result|=1;
+    /* Framing of top-level and nested codec parameters. */
+    static const unsigned char framed[]={0,9,0,1,0,5,0,0,'S',0,4,0,99};
+    static const unsigned char short_header[]={0,4,0};
+    static const unsigned char zero_size[]={0,0,0,1};
+    static const unsigned char overrun[]={0,5,0,2};
+    static const unsigned char nested_overrun[]={0,8,0,7,0,5,0,0};
+    static const unsigned char nested_tail[]={0,5,0,1,0};
+    if(!start_params_ok(framed,sizeof(framed),1)
+       || !start_params_ok(0,0,1)
+       || start_params_ok(short_header,sizeof(short_header),1)
+       || start_params_ok(zero_size,sizeof(zero_size),1)
+       || start_params_ok(overrun,sizeof(overrun),1)
+       || start_params_ok(nested_overrun,sizeof(nested_overrun),1)
+       || start_params_ok(nested_tail,sizeof(nested_tail),1))result|=1;
+    static const unsigned char bad_frame[]={0x40,0x40,0,10,0x43,1,0,5,0,2};
+    start_len=6;start_msg[0]=0x55;
+    if(start_configure(bad_frame,sizeof(bad_frame))!=-12 || start_len || start_msg[0])result|=1;
     /* Rejecting malformed replacements must erase the old native payload. */
     static const unsigned char invalid[]={0x40,0x40,0,6,0x43,0};
     start_len=6;for(u32 i=0;i<6;i++)start_msg[i]=0x55;
