@@ -85,6 +85,14 @@ public final class IdentityRegistryHarness {
         registry.removeVehicle("fixture.k5");
         check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.UNAVAILABLE
                 && changes[0]==notified+1,"last owner withdrawal clears readiness");
+        // Exact CPUL RC11 consumer tuple, reviewed at 554ec88f.
+        CarPlayIdentification.ThemeIdentity cpul=new CarPlayIdentification.ThemeIdentity("44C9FA31EC",985L,"19.0");
+        registry.registerTheme("fixture.cpul",cpul,true);
+        IdentityRegistry.Snapshot cpulSnapshot=registry.snapshot();
+        check("44C9FA31EC:985:19.0".equals(cpulSnapshot.theme.encoded()) && cpulSnapshot.start,"CPUL tuple and StartSession opt-in");
+        check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.REGISTERED,"CPUL registration is not native activation");
+        registry.removeTheme("fixture.cpul");
+        check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.UNAVAILABLE,"CPUL withdrawal");
         System.out.println("PASS mock mods compose independent vehicle and theme contributions");
     }
 
