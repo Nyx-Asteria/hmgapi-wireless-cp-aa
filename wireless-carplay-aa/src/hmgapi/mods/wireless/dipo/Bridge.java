@@ -276,21 +276,26 @@ final class Bridge {
     static void onCpIapIn(Object cp, byte[] data, int len) {
         try {
             if (cp != null) sCp = cp;
-            if (data == null || len <= 0 || sUsb) return;
+            if (data == null || data.length == 0 || len <= 0 || sUsb) return;
             if (len >= data.length) len = data.length;
             byte[] b = new byte[len];
             System.arraycopy(data, 0, b, 0, len);
             if (!sCpClient) startCpClient("iAP2 data from CarPlay channel");
-            IIap2Service s = sIap2;
-            if (sCpConnected && s != null) {
-                flushPending(s);
-                s.Iap2SvcTransportReadDone(b, len);
-            } else {
-                synchronized (sPendingIn) {
+            final IIap2Service s;
+            synchronized (sPendingIn) {
+                // Decide whether to queue while holding the same lock used by the
+                // connection callback's drain. Otherwise a packet can be queued
+                // just after that callback drains the pending list.
+                s = sIap2;
+                if (!sCpConnected || s == null) {
                     if (sPendingIn.size() < MAX_PENDING) sPendingIn.add(b);
                     else diagnosticRxOverflow++;
+                    return;
                 }
             }
+            // Never hold the pending-list monitor across Binder calls.
+            flushPending(s);
+            s.Iap2SvcTransportReadDone(b, len);
         } catch (Throwable t) {
             error("onCpIapIn", t);
         }
@@ -750,6 +755,10 @@ final class Bridge {
             if ((component == COMPONENT_USB || component == COMPONENT_BT_CARPLAY) && serial != null && serial.contains(":")) sLastBtId = serial;
             if (component == COMPONENT_USB) sUsb = true;
             else if (component == COMPONENT_CARPLAY_CLIENT) {
+                if (!sCpClient || sUsb) {
+                    log("Ignoring CarPlay-channel connected callback outside active wireless handover");
+                    return;
+                }
                 onCpClientConnected();
                 sReattach.connected();
             }
