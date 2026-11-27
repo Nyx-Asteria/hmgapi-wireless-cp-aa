@@ -26,9 +26,16 @@ public final class SessionExporter {
                     File root = new File(path);
                     if (!mounted(root, new File("/proc/mounts"))) continue;
                     try {
+                        MountGuard guard = new MountGuard(root, new File("/proc/mounts"));
                         File dest = child(root, prefix);
-                        exportDirectory(new File(files, args[0] + "-carplay-sessions"), dest, "sessions");
-                        if (!wcp) exportDirectory(new File(files, "stbt-third-party-navigation"), dest, "third-party-navigation");
+                        Exception first = null;
+                        try { exportDirectory(new File(files, args[0] + "-carplay-sessions"), dest, "sessions", guard); }
+                        catch (Exception e) { first = e; }
+                        if (!wcp) {
+                            try { exportDirectory(new File(files, "stbt-third-party-navigation"), dest, "third-party-navigation", guard); }
+                            catch (Exception e) { if (first == null) first = e; }
+                        }
+                        if (first != null) throw first;
                     } catch (Exception e) { error = e.toString(); }
                 }
             } catch (Exception e) { error = e.toString(); }
@@ -40,18 +47,38 @@ public final class SessionExporter {
         }
     }
 
+    interface Guard { void check() throws IOException; }
+    private static final Guard NO_GUARD = new Guard() { public void check() {} };
+
+    static final class MountGuard implements Guard {
+        private final File root, mounts;
+        private final String identity;
+        MountGuard(File root, File mounts) throws IOException {
+            this.root = root; this.mounts = mounts;
+            identity = mountIdentity(root, mounts);
+            if (identity == null) throw new IOException("USB not mounted");
+        }
+        public void check() throws IOException {
+            if (!identity.equals(mountIdentity(root, mounts))) throw new IOException("USB mount changed");
+        }
+    }
+
     static boolean mounted(File root, File mounts) throws IOException {
-        if (!root.isDirectory()) return false;
+        return mountIdentity(root, mounts) != null;
+    }
+
+    private static String mountIdentity(File root, File mounts) throws IOException {
+        if (!root.isDirectory()) return null;
         String canonical = root.getCanonicalPath();
         try (BufferedReader in = new BufferedReader(new FileReader(mounts))) {
             String line;
             while ((line = in.readLine()) != null) {
                 String[] fields = line.split(" ");
                 if (fields.length > 2 && (fields[1].equals(root.getPath()) || fields[1].equals(canonical)))
-                    return true;
+                    return fields[0] + " " + fields[1] + " " + fields[2];
             }
         }
-        return false;
+        return null;
     }
 
     static File child(File parent, String name) throws IOException {
@@ -67,35 +94,56 @@ public final class SessionExporter {
     }
 
     static void exportDirectory(File source, File root, String kind) throws Exception {
+        exportDirectory(source, root, kind, NO_GUARD);
+    }
+
+    static void exportDirectory(File source, File root, String kind, Guard guard) throws Exception {
         if (!source.isDirectory()) return;
         File[] files = source.listFiles();
         if (files == null) throw new IOException("cannot list journals");
         Arrays.sort(files);
+        Exception failure = null;
         for (File src : files) {
             String name = src.getName();
             if (!name.matches("session-[a-zA-Z0-9-]+\\.log")) continue;
-            if (!src.isFile() || !child(source, name).equals(src.getCanonicalFile())) continue;
-            directory(root);
-            File dest = child(root, kind);
-            directory(dest);
-            exportOne(src, dest);
+            try {
+                if (!src.isFile() || !child(source, name).equals(src.getCanonicalFile())) continue;
+                guard.check();
+                directory(root);
+                File dest = child(root, kind);
+                guard.check();
+                directory(dest);
+                exportOne(src, dest, guard);
+            } catch (Exception e) {
+                if (failure == null) failure = e;
+            }
         }
+        if (failure != null) throw failure;
     }
 
     static void exportOne(File source, File dest) throws Exception {
+        exportOne(source, dest, NO_GUARD);
+    }
+
+    static void exportOne(File source, File dest, Guard guard) throws Exception {
+        guard.check();
         if (source.length() > MAX_BYTES) throw new IOException("journal exceeds export limit");
         File target = child(dest, source.getName());
         File part = child(dest, source.getName() + ".part");
         byte[] expected = digest(source);
         if (target.isFile() && Arrays.equals(expected, digest(target))) {
+            guard.check();
             if (part.exists() && !part.delete()) throw new IOException("cannot remove stale partial");
+            complete(target, expected, guard);
             return;
         }
         if (target.exists()) throw new IOException("destination conflict: " + target.getName());
         if (dest.getUsableSpace() < source.length() + 65536) throw new IOException("USB space low");
+        guard.check();
         if (part.exists() && !part.delete()) throw new IOException("cannot clear partial");
         boolean published = false;
         try {
+            guard.check();
             try (InputStream in = new FileInputStream(source); FileOutputStream out = new FileOutputStream(part)) {
                 byte[] buffer = new byte[32768];
                 long total = 0;
@@ -107,13 +155,60 @@ public final class SessionExporter {
                 }
                 out.getFD().sync();
             }
+            guard.check();
             if (!Arrays.equals(expected, digest(part)) || !Arrays.equals(expected, digest(source)))
                 throw new IOException("journal verification failed");
+            guard.check();
             if (target.exists() || !part.renameTo(target)) throw new IOException("cannot publish journal");
             published = true;
+            complete(target, expected, guard);
             System.out.println("Verified export: " + target.getName());
         } finally {
-            if (!published) part.delete();
+            if (!published) {
+                try { guard.check(); part.delete(); } catch (IOException ignored) { /* Never clean up on a different mount. */ }
+            }
+        }
+    }
+
+    /** Publish a per-file manifest only after the final USB file has been verified. */
+    private static void complete(File target, byte[] hash, Guard guard) throws Exception {
+        guard.check();
+        File dest = target.getParentFile();
+        File marker = child(dest, target.getName() + ".complete");
+        File part = child(dest, target.getName() + ".complete.part");
+        StringBuilder hex = new StringBuilder();
+        for (byte b : hash) {
+            int v = b & 255;
+            hex.append(Character.forDigit(v >>> 4, 16)).append(Character.forDigit(v & 15, 16));
+        }
+        if (!Arrays.equals(hash, digest(target))) throw new IOException("published journal verification failed");
+        byte[] manifest = ("SHA256 " + hex + "\nBYTES " + target.length()
+                + "\nFILE " + target.getName() + "\n").getBytes("UTF-8");
+        byte[] expected = MessageDigest.getInstance("SHA-256").digest(manifest);
+        guard.check();
+        if (marker.isFile() && marker.length() == manifest.length && Arrays.equals(expected, digest(marker))) {
+            if (part.exists() && !part.delete()) throw new IOException("cannot clear stale manifest partial");
+            return;
+        }
+        if (marker.exists()) throw new IOException("completion marker conflict: " + marker.getName());
+        if (part.exists() && !part.delete()) throw new IOException("cannot clear manifest partial");
+        boolean published = false;
+        try {
+            guard.check();
+            try (FileOutputStream out = new FileOutputStream(part)) {
+                out.write(manifest);
+                out.getFD().sync();
+            }
+            guard.check();
+            if (!Arrays.equals(expected, digest(part)) || !Arrays.equals(hash, digest(target)))
+                throw new IOException("completion verification failed");
+            guard.check();
+            if (marker.exists() || !part.renameTo(marker)) throw new IOException("cannot publish completion marker");
+            published = true;
+        } finally {
+            if (!published) {
+                try { guard.check(); part.delete(); } catch (IOException ignored) {}
+            }
         }
     }
 
