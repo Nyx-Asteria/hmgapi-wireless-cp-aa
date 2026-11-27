@@ -21,6 +21,7 @@ static int (*protect_page)(void *,u32,int);
 static Mutex lock_mutex,unlock_mutex;
 static u32 identity_mutex;
 static int configured,has_vehicle,has_theme,legacy_theme,has_ev;
+static u32 identity_built, identity_seen;
 static char display_name[321];
 static char theme[97];
 static u32 dc_w,ac_w,engine=2,connector,dc_connector,ac_connector;
@@ -64,11 +65,12 @@ static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
 static Param parameter(u16 id,u16 type);
 static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *more){
     (void)type;(void)key;if(more)*more=0;
-    if(id==20 && has_vehicle){*count=has_ev?9:5;return info_copy;}
+    if(id==20 && has_vehicle){identity_seen|=1;*count=has_ev?9:5;return info_copy;}
     if(id==21 && has_ev){*count=15;return status_copy;}
     if(id==WIRELESS_GROUP && stock_children){
         u32 n=0;const Param *stock=stock_children(id,type,(u16*)&n,key,more);
         if(!stock || n>WIRELESS_MAX){*count=(u16)n;return stock;}
+        identity_seen|=2;
         /* LIVI advertises only the asset identifier in transport group 24,
            parameter 6. Preserve stock parameter 5 and avoid duplicate 6. */
         if(legacy_theme){
@@ -94,6 +96,8 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE) || command!=0x1d01 || table!=root_table || count!=24)
         return raw_builder(handle,session,a,b,command,table,count,name,lookup);
     if(lock_mutex(&identity_mutex))return 0;
+    if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){unlock_mutex(&identity_mutex);return raw_builder(handle,session,a,b,command,table,count,name,lookup);}
+    identity_seen=0;
     Param root[24];for(u32 i=0;i<24;i++){
         root[i]=root_table[i];
         if(start_len && root[i].id==6 && root[i].length){stock_sent_blob=(Blob)root[i].length;root[i].length=(u32)start_sent_blob;}
@@ -104,6 +108,9 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
         }
     }
     u32 result=raw_builder(handle,session,a,b,command,root,24,name,identity_value);
+    u32 required=(has_vehicle?1:0)|(has_theme?2:0);
+    if(result && required && (identity_seen&required)==required)
+        __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
     unlock_mutex(&identity_mutex);return result;
 }
 static Builder recipe_original(Builder entry){
@@ -150,6 +157,7 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     }
     if(lock_mutex(&identity_mutex))return -15;
     start_clear_locked();
+    __atomic_store_n(&identity_built,0,__ATOMIC_RELEASE);
     has_vehicle=vehicle;has_ev=ev;has_theme=themed;legacy_theme=themed && legacy;
     /* API v2 still accepts the complete tuple; identification carries only
        its asset identifier. StartSessionCodec carries version and SDK. */
@@ -192,6 +200,10 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSession(JNI
     if(n)(*env)->GetByteArrayRegion(env,message,0,n,(jbyte*)bytes);
     if((*env)->ExceptionCheck(env))return -12;
     return start_configure(bytes,(u32)n);
+}
+JNIEXPORT jboolean JNICALL Java_hmgapi_mods_wireless_NativeIdentity_identityBuilt(JNIEnv *env,jclass cls){
+    (void)env;(void)cls;
+    return __atomic_load_n(&configured,__ATOMIC_ACQUIRE) && __atomic_load_n(&identity_built,__ATOMIC_ACQUIRE);
 }
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(JNIEnv *env,jclass cls,jint which){
     (void)env;(void)cls;

@@ -186,6 +186,11 @@ final class IdentityInstaller {
                         refreshStart(mod, app, registry);
                         synchronized (IdentityInstaller.class) {
                             if (loaded) {
+                                if(armed && registry.identityStatus().readiness==CarPlayIdentification.Readiness.ARMED
+                                        && NativeIdentity.identityBuilt()
+                                        && registry.report(armedGeneration,CarPlayIdentification.Readiness.ADVERTISED,"native identification builder completed; delivery not confirmed")) {
+                                    mod.log("CarPlay identity: generation="+armedGeneration+" identification built; phone acceptance unconfirmed");
+                                }
                                 int o = NativeIdentity.startSessionStatus(0), n = NativeIdentity.startSessionStatus(1);
                                 if (o != offers || n != sends) {
                                     mod.log("CarPlayStart: availability offers=" + o + " answers attempted=" + n
