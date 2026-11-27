@@ -213,6 +213,11 @@ final class Bridge {
         if (btGeneration.get() == generation) sSession = false;
     }
 
+    private static synchronized void invalidateBtAttach() {
+        btGeneration.incrementAndGet();
+        sSession = false;
+    }
+
     static synchronized void onSppUp(final String addr) {
         if (addr == null || sSession) return;
         sAddr = addr;
@@ -849,6 +854,7 @@ final class Bridge {
                     sUsb = true;
                     resetReceive();
                 }
+                invalidateBtAttach();
             }
             else if (component == COMPONENT_CARPLAY_CLIENT) {
                 final long generation;
@@ -868,7 +874,7 @@ final class Bridge {
                 sUsb = false;
                 onUsbGone();
             } else if (component == COMPONENT_BT_CARPLAY) {
-                sSession = false;
+                invalidateBtAttach();
             } else if (component == COMPONENT_CARPLAY_CLIENT) {
                 sCpConnected = false;
                 if (sCpClient && !sUsb) Dipo.rgLinkDown("iAP2 disconnected comp=5");

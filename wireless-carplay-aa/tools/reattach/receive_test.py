@@ -20,7 +20,10 @@ import java.util.*;
 import java.util.concurrent.*;
 public class ReceiveTest {
     interface IIap2Service { void Iap2SvcTransportReadDone(byte[] b, int n); }
-    static volatile boolean sCpConnected, sCpClient, sUsb;
+    static volatile boolean sCpConnected, sCpClient, sUsb, sCpWireless, sSession;
+    static volatile String sAddr;
+    static boolean enabled() { return true; }
+    static final java.util.concurrent.atomic.AtomicInteger btGeneration = new java.util.concurrent.atomic.AtomicInteger();
     static volatile IIap2Service sIap2;
     static volatile Object sCp;
     static final int MAX_PENDING = 64;
@@ -39,7 +42,7 @@ public class ReceiveTest {
     static int errors;
     static void error(String why, Throwable t) { errors++; }
 """ + "\n".join(method(s) for s in (
-    "static void onCpIapIn(", "static boolean onCpClientConnected(", "private static void acceptReceive(", "private static void flushPending(", "private static void resetReceive(", "private static void replaceReceiveService("
+    "static void onCpIapIn(", "static boolean onCpClientConnected(", "private static void acceptReceive(", "private static void flushPending(", "private static void resetReceive(", "private static void replaceReceiveService(", "private static boolean currentBtAttach(", "private static synchronized void failBtAttach(", "private static synchronized void invalidateBtAttach("
 )) + """
     static void check(boolean v,String msg) { if(!v) throw new AssertionError(msg); }
     static void send(int n) { onCpIapIn(null,new byte[]{(byte)n},1); }
@@ -115,7 +118,21 @@ public class ReceiveTest {
         long stable=rxGeneration;
         replaceReceiveService(replacement);
         check(stable==rxGeneration && sCpConnected,"same service does not reset");
-        System.out.println("Bridge receive FIFO, copy, overflow, concurrent enqueue, failure and USB checks passed");
+        sUsb=false; sCpClient=false; sCpWireless=false; sAddr="fixture"; sSession=true;
+        int oldBt=btGeneration.incrementAndGet();
+        check(currentBtAttach(oldBt,sAddr),"current Bluetooth attach accepted");
+        invalidateBtAttach();
+        sSession=true;
+        int newBt=btGeneration.get();
+        check(!currentBtAttach(oldBt,sAddr),"invalidated Bluetooth attach cannot revive");
+        failBtAttach(oldBt);
+        check(currentBtAttach(newBt,sAddr),"stale failure cannot clear newer session");
+        sUsb=true;
+        check(!currentBtAttach(newBt,sAddr),"USB excludes Bluetooth attach");
+        invalidateBtAttach();
+        sUsb=false; sSession=true;
+        check(!currentBtAttach(newBt,sAddr),"USB takeover invalidates old generation even after unplug");
+        System.out.println("Bridge receive and Bluetooth generation checks passed");
     }
 }
 """
