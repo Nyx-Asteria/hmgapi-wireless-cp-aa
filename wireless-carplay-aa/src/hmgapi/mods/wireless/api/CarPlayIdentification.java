@@ -59,7 +59,7 @@ public interface CarPlayIdentification {
         }
     }
 
-    /** Immutable EV identity fields represented in the iAP2 VehicleInformation group. */
+    /** Immutable vehicle identity fields represented in the iAP2 VehicleInformation group. */
     final class VehicleIdentity {
         public static final int ENGINE_GASOLINE = 0;
         public static final int ENGINE_DIESEL = 1;
@@ -79,7 +79,8 @@ public interface CarPlayIdentification {
                 throw new IllegalArgumentException("displayName");
             if (engineType < ENGINE_GASOLINE || engineType > ENGINE_CNG)
                 throw new IllegalArgumentException("engineType");
-            if (connectors == null || connectors.length == 0)
+            if (connectors == null || (engineType == ENGINE_ELECTRIC && connectors.length == 0)
+                    || (engineType != ENGINE_ELECTRIC && connectors.length != 0))
                 throw new IllegalArgumentException("connectors");
             this.displayName = displayName;
             this.engineType = engineType;

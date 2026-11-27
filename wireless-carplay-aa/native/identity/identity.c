@@ -20,7 +20,7 @@ static u32 *hook_mailbox;
 static int (*protect_page)(void *,u32,int);
 static Mutex lock_mutex,unlock_mutex;
 static u32 identity_mutex;
-static int configured,has_vehicle,has_theme,legacy_theme;
+static int configured,has_vehicle,has_theme,legacy_theme,has_ev;
 static char display_name[321];
 static char theme[97];
 static u32 dc_w,ac_w,engine=2,connector,dc_connector,ac_connector;
@@ -64,8 +64,8 @@ static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
 static Param parameter(u16 id,u16 type);
 static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *more){
     (void)type;(void)key;if(more)*more=0;
-    if(id==20){*count=9;return info_copy;}
-    if(id==21){*count=15;return status_copy;}
+    if(id==20 && has_vehicle){*count=has_ev?9:5;return info_copy;}
+    if(id==21 && has_ev){*count=15;return status_copy;}
     if(id==WIRELESS_GROUP && stock_children){
         u32 n=0;const Param *stock=stock_children(id,type,(u16*)&n,key,more);
         if(!stock || n>WIRELESS_MAX){*count=(u16)n;return stock;}
@@ -84,8 +84,8 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
     return 0;
 }
 static void *identity_value(u16 id,u16 type,u16 *n,void *key,int *more){
-    if(id==20){if(more)*more=0;return (void*)info_value;}
-    if(id==21){if(more)*more=0;return (void*)status_value;}
+    if(id==20 && has_vehicle){if(more)*more=0;return (void*)info_value;}
+    if(id==21 && has_ev){if(more)*more=0;return (void*)status_value;}
     if(id==WIRELESS_GROUP && has_theme && wireless_lookup){if(more)*more=0;return (void*)wireless_value;}
     return root_lookup(id,type,n,key,more);
 }
@@ -98,7 +98,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
         root[i]=root_table[i];
         if(start_len && root[i].id==6 && root[i].length){stock_sent_blob=(Blob)root[i].length;root[i].length=(u32)start_sent_blob;}
         else if(start_len && root[i].id==7 && root[i].length){stock_received_blob=(Blob)root[i].length;root[i].length=(u32)start_received_blob;}
-        else if(has_vehicle && (root[i].id==20 || root[i].id==21)){root[i].used=1;root[i].children=(u32)identity_children;}
+        else if((has_vehicle && root[i].id==20) || (has_ev && root[i].id==21)){root[i].used=1;root[i].children=(u32)identity_children;}
         else if(has_theme && root[i].id==WIRELESS_GROUP && wireless_lookup && root[i].children){
             stock_children=(Children)root[i].children;root[i].children=(u32)identity_children;
         }
@@ -140,15 +140,17 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     if(!hook_mailbox){int rc=bind();if(rc)return rc;}
     int vehicle=len!=0,themed=theme_len!=0;
     if(!vehicle && !themed)return -12;
-    if(vehicle && (!string_ok(name,len) || len>320 || engine_type<0 || engine_type>3 || dc_type<0 || dc_type>1 || ac_type!=2
-            || !dc || dc>1000000 || !ac || ac>1000000))return -12;
+    int ev=vehicle && engine_type==2;
+    if(vehicle && (!string_ok(name,len) || len>320 || engine_type<0 || engine_type>3))return -12;
+    if(ev && (dc_type<0 || dc_type>1 || ac_type!=2 || !dc || dc>1000000 || !ac || ac>1000000))return -12;
+    if(vehicle && !ev && (dc_type!=-1 || ac_type!=-1 || dc || ac))return -12;
     if(themed){
         if(!wireless_lookup || !string_ok(theme_id,theme_len) || theme_len>96)return wireless_lookup?-12:-18;
         for(u32 i=0;i<theme_len;i++)if(theme_id[i]<0x21 || theme_id[i]>0x7e)return -12;
     }
     if(lock_mutex(&identity_mutex))return -15;
     start_clear_locked();
-    has_vehicle=vehicle;has_theme=themed;legacy_theme=themed && legacy;
+    has_vehicle=vehicle;has_ev=ev;has_theme=themed;legacy_theme=themed && legacy;
     /* API v2 still accepts the complete tuple; identification carries only
        its asset identifier. StartSessionCodec carries version and SDK. */
     u32 asset_len=0;

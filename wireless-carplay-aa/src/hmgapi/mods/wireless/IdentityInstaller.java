@@ -89,7 +89,7 @@ final class IdentityInstaller {
                     dcType = connector.type; dcPower = connector.maximumPowerW;
                 }
             }
-            if (dcType == -1 || acType == -1)
+            if (vehicle.engineType == CarPlayIdentification.VehicleIdentity.ENGINE_ELECTRIC && (dcType == -1 || acType == -1))
                 throw new IllegalStateException("CarPlay EV identity requires one DC and one AC connector");
         }
         if (!loaded) { NativeIdentity.load(); loaded = true; }
