@@ -93,6 +93,10 @@ static int fixture_blob(unsigned char *buf,int cap,u32 id,u32 x,u32 y){
         for(int i=0;i<fixture_blob_size;i++)buf[i]=fixture_blob_bytes[i];
     return fixture_blob_size;
 }
+static int fixture_blob_unstable(unsigned char *buf,int cap,u32 id,u32 x,u32 y){
+    (void)cap;(void)id;(void)x;(void)y;
+    return buf?2:4;
+}
 static void semihost(u32 operation,const void *argument);
 int test_main(void){
     root[0]=parameter(20,13);root[0].children=(u32)identity_children;
@@ -185,7 +189,8 @@ int test_main(void){
     // Preserve OEM capability IDs; append only while a response is armed.
     unsigned char capabilities[8]={0};
     start_len=6;start_capability_seen=0;
-    if(start_append(fixture_blob,0,0,0,0,0,1)!=6 || start_capability_seen)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=4 || start_capability_seen)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,0)!=6 || start_capability_seen)result|=1;
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=4
        || capabilities[0]!=0x1d || capabilities[1]!=1 || capabilities[2]!=0x43 || capabilities[3]!=1 || start_capability_seen!=1)result|=1;
     if(start_append(fixture_blob,capabilities,8,0,0,0,0)!=6
@@ -196,6 +201,9 @@ int test_main(void){
        || start_append(fixture_blob,capabilities,8,0,0,0,1)!=3)result|=1;
     fixture_blob_size=-1;
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=-1)result|=1;
+    if(start_append(fixture_blob_unstable,0,0,0,0,0,0)!=4)result|=1;
+    fixture_blob_size=1026;
+    if(start_append(fixture_blob,0,0,0,0,0,0)!=1026)result|=1;
     fixture_blob_size=2147483647;
     if(start_append(fixture_blob,0,0,0,0,0,1)!=2147483647)result|=1;
     fixture_blob_size=4;__atomic_store_n(&start_capability_built,3,__ATOMIC_RELEASE);
