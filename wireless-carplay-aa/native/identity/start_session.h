@@ -9,7 +9,7 @@
 typedef struct {u32 name,id,label,arg,notify,reply;} StartHandler;
 typedef int (*Blob)(unsigned char *,int,u32,u32,u32);
 static unsigned char start_msg[START_MAX];
-static u32 start_len,start_offers,start_sends;
+static u32 start_len,start_offers,start_sends,start_generation;
 static int start_last;
 static Blob stock_sent_blob,stock_received_blob;
 static void *(*packet_create)(u32,u32);
@@ -21,21 +21,31 @@ _Static_assert(sizeof(StartHandler)==24,"control dispatch ABI");
 
 static void start_clear_locked(void){
     start_len=0;
+    ++start_generation;
     for(u32 i=0;i<START_MAX;i++)start_msg[i]=0;
 }
 static u32 start_notify(u32 link,u32 session,const unsigned char *params,u32 n){
     (void)params;(void)n;
     __atomic_add_fetch(&start_offers,1,__ATOMIC_RELEASE);
-    unsigned char snapshot[START_MAX];u32 len=0;
+    unsigned char snapshot[START_MAX];u32 len=0,generation=0;
     if(lock_mutex(&identity_mutex))return 0;
     if(__atomic_load_n(&configured,__ATOMIC_ACQUIRE) && has_theme){
-        len=start_len;
+        len=start_len;generation=start_generation;
         for(u32 i=0;i<len;i++)snapshot[i]=start_msg[i];
     }
     unlock_mutex(&identity_mutex);
     if(!len){__atomic_store_n(&start_last,-1,__ATOMIC_RELEASE);return 0;}
     void *packet=packet_create(link,session);
     if(!packet){__atomic_store_n(&start_last,-2,__ATOMIC_RELEASE);return 0;}
+    // Recheck after OEM allocation, before allocating or copying sensitive payload.
+    // Never hold the identity mutex across OEM packet allocation/send calls.
+    int current=0;
+    if(!lock_mutex(&identity_mutex)){
+        current=__atomic_load_n(&configured,__ATOMIC_ACQUIRE) && has_theme
+            && start_len==len && start_generation==generation;
+        unlock_mutex(&identity_mutex);
+    }
+    if(!current){packet_destroy(packet);__atomic_store_n(&start_last,-4,__ATOMIC_RELEASE);return 0;}
     unsigned char *buf=session_malloc(len,"carplaystart",1);
     if(!buf){packet_destroy(packet);__atomic_store_n(&start_last,-3,__ATOMIC_RELEASE);return 0;}
     for(u32 i=0;i<len;i++)buf[i]=snapshot[i];
