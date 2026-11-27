@@ -12,6 +12,8 @@ final class NativeIdentity {
     static native boolean identityBuilt();
     // Most recent successful builder: engine=1, theme=2, name=4.
     static native int identityEvidence();
+    // Atomic observation: identity bits 0-2, capability bits 3-4, payload bit 5, aggregate bit 6; -1 unavailable.
+    static native int negotiationEvidence();
     static native int startSession(byte[] message);
     static native int startSessionStatus(int which);
 }

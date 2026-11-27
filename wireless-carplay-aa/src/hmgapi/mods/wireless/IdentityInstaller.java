@@ -264,26 +264,29 @@ final class IdentityInstaller {
                         }
                         synchronized (IdentityInstaller.class) {
                             if (loaded) {
-                                if(armed && registry.identityStatus().readiness==CarPlayIdentification.Readiness.ARMED
-                                        && NativeIdentity.identityBuilt()
+                                int observed=NativeIdentity.negotiationEvidence();
+                                if(armed && observed>=0 && registry.identityStatus().readiness==CarPlayIdentification.Readiness.ARMED
+                                        && (observed&64)!=0
                                         && registry.report(armedGeneration,CarPlayIdentification.Readiness.ADVERTISED,"native identification builder completed; delivery not confirmed")) {
                                     mod.log("CarPlay identity: generation="+armedGeneration+" identification built; phone acceptance unconfirmed");
                                 }
-                                int currentEvidence=NativeIdentity.identityEvidence();
+                                int currentEvidence=observed&7;
+                                if(observed>=0){
                                 if(currentEvidence!=evidence || armedGeneration!=evidenceGeneration){
                                     mod.log("CarPlay identity: generation="+armedGeneration
                                             +" vehicle values built="+((currentEvidence&5)==5)
                                             +" theme value built="+((currentEvidence&2)!=0));
                                     evidence=currentEvidence;evidenceGeneration=armedGeneration;
                                 }
-                                int capability=NativeIdentity.startSessionStatus(9);
+                                int capability=(observed>>3)&3;
                                 if(armed && !shutdownPending)
                                     registry.reportNegotiation(armedGeneration,currentEvidence,capability,
-                                            lastStart!=null && !withdrawal.pending());
+                                            (observed&32)!=0 && lastStart!=null && !withdrawal.pending());
                                 if(capability!=capabilityEvidence){
                                     mod.log("CarPlayStart: capability builder evidence sent="+((capability&1)!=0)
                                             +" received="+((capability&2)!=0)+"; delivery unconfirmed");
                                     capabilityEvidence=capability;
+                                }
                                 }
                                 int o = NativeIdentity.startSessionStatus(0), n = NativeIdentity.startSessionStatus(1);
                                 int p=NativeIdentity.startSessionStatus(3), a=NativeIdentity.startSessionStatus(4);

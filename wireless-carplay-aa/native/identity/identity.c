@@ -267,6 +267,22 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE))return 0;
     return (int)__atomic_load_n(&identity_evidence,__ATOMIC_ACQUIRE);
 }
+/* Read the related builder fields under one lock, rather than combining
+ * independent JNI observations from potentially different builds. */
+JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(JNIEnv *env,jclass cls){
+    (void)env;(void)cls;
+    if(!lock_mutex || !unlock_mutex)return 0;
+    if(lock_mutex(&identity_mutex))return -1; // observation unavailable, not a negative result
+    u32 bits=0;
+    if(__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){
+        bits=__atomic_load_n(&identity_evidence,__ATOMIC_ACQUIRE)&7;
+        bits|=(__atomic_load_n(&start_capability_built,__ATOMIC_ACQUIRE)&3)<<3;
+        if(start_len)bits|=32;
+        if(__atomic_load_n(&identity_built,__ATOMIC_ACQUIRE))bits|=64;
+    }
+    unlock_mutex(&identity_mutex);
+    return (jint)bits;
+}
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(JNIEnv *env,jclass cls,jint which){
     (void)env;(void)cls;
     if(which==0)return (int)__atomic_load_n(&start_offers,__ATOMIC_ACQUIRE);

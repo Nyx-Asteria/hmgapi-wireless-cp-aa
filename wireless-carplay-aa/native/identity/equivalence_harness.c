@@ -289,6 +289,17 @@ int test_main(void){
     raw_builder=fallback_build;lock_mutex=mutex_fail;
     if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)result|=1;
     raw_builder=build;lock_mutex=mutex;
+    // Coherent JNI snapshot includes the actual native payload state.
+    start_len=6;
+    __atomic_store_n(&identity_evidence,7,__ATOMIC_RELEASE);
+    __atomic_store_n(&start_capability_built,3,__ATOMIC_RELEASE);
+    __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=127)result|=1;
+    start_clear_locked();
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=71)result|=1;
+    lock_mutex=mutex_fail;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=-1)result|=1;
+    lock_mutex=mutex;
     // Shutdown must report native failures and be safe to retry.
     lock_mutex=mutex_fail;
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-15 || configured || identity_built)result|=1;
@@ -296,7 +307,8 @@ int test_main(void){
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-19 || start_len)result|=1;
     protect_fail=0;
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=0 || mailbox || start_len
-       || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0))result|=1;
+       || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)
+       || Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0))result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";
