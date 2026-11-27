@@ -189,6 +189,9 @@ Parent 64cd524f0130f924417a0c934e9a0d285738b7cc. Reopened actual user ZIP and ex
 ## Independent FileTransfer cycle — HKMC callback whitelist closed
 Parent 09e743698fba8f2f4d6a0518b1d1fd125eb70dd5. Reopened actual extracted callback binary, verified hash and decoded five command literals plus unmatched-command return. No file-channel implementation in this callback; platform fallback alone cannot establish support. Next prioritize phone-side endpoint mapping. Primary identity 100%, transport research 70% held (negative evidence), protocol 45%, experiments 0%. Parent CI running at inspection (46072734654). No CPUL edits or release.
 
+## Independent FileTransfer cycle — reproducibility checkpoint
+Parent fb985ac979d2a2d71f10f568acc3eb163edf811f. Confirmed extracted analysis workspace still exists; no new binary inference in this cycle. Retain prior transport 70% estimate, protocol 45%, runtime experiments 0%. Primary identity 100%. Prior CI [{"status":"in_progress","conclusion":null,"url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46072905225"}]. No CPUL changes or release.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
