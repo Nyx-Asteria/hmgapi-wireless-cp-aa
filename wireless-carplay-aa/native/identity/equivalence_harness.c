@@ -80,6 +80,11 @@ int test_main(void){
     if(start_configure(0,6)!=-12 || start_len || start_msg[0])result|=1;
     start_len=6;start_msg[0]=0x55;
     if(start_configure(0,0)!=0 || start_len || start_msg[0])result|=1;
+    /* JNI null input takes the invalidation path without touching JNIEnv. */
+    start_len=6;start_msg[0]=0x55;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSession(0,0,0)!=-12 || start_len || start_msg[0])result|=1;
+    start_len=6;start_msg[0]=0x55;
+    if(start_configure(0,START_MAX+1)!=-12 || start_len || start_msg[0])result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";
