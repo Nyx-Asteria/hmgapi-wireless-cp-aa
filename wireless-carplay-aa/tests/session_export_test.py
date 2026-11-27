@@ -26,6 +26,14 @@ for modern in (False, True):
         (src / "session-002.log").write_text("complete\n")
         (src / "session-003.active").write_text("no native opt-in\n")
         dest = usb / "WCP-LOGS/sessions"
+        proc = d / "proc"
+        proc.mkdir()
+        foreign = proc / "123"
+        foreign.mkdir()
+        (foreign / "exe").symlink_to("/system/bin/logcat")
+        (foreign / "fd").mkdir()
+        (foreign / "fd" / "3").symlink_to(native / "session-999.native.log")
+        (native / "session-999.native.log").write_text("orphan\n")
         logcat = binpath / "logcat"
         helptext = "-T COUNT" if modern else "-t COUNT"
         logcat.write_text("#!/bin/sh\n"
@@ -43,20 +51,23 @@ for modern in (False, True):
             + 'n=$((n+1)); echo "$n" > "' + str(d / "ticks") + '"\n'
             + '/bin/sleep 0.1\n'
             + 'case "$n" in\n'
-            + '1) [ ! -e "' + str(dest) + '" ] || exit 99; echo "dev ' + str(usb) + ' vfat rw 0 0" > "' + str(mounts) + '";;\n'
-            + '4) [ ! -e "' + str(native / "session-001.native-ready") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
-            + '6) kill -TERM "$PPID";;\nesac\n')
+            + '1) [ ! -e "' + str(d / "starts") + '" ] && [ ! -e "' + str(native / "session-999.native-ready") + '" ] || touch "' + str(d / "orphan-violation") + '"; rm "' + str(foreign / "fd" / "3") + '";;\n'
+            + '2) [ ! -e "' + str(dest) + '" ] || exit 99; echo "dev ' + str(usb) + ' vfat rw 0 0" > "' + str(mounts) + '";;\n'
+            + '5) [ ! -e "' + str(native / "session-001.native-ready") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
+            + '7) kill -TERM "$PPID";;\nesac\n')
         sleep.chmod(0o755)
         script = (root / "export-sessions.sh").read_text()
         script = script.replace("/data/data/com.daudio.app.dipo/files/wcp-carplay-sessions", str(src))
         script = script.replace("/data/hmgapi/logs/wcp-native-session", str(native))
         script = script.replace("/storage/usb", str(d / "storage/usb"))
         script = script.replace("/proc/mounts", str(mounts))
+        script = script.replace("proc_root=/proc", "proc_root=" + str(proc))
         subprocess.run(["sh", "-c", script], env={**os.environ, "PATH":str(binpath)+":"+os.environ["PATH"]},
                        check=True, timeout=15)
         assert (d / "starts").read_text().splitlines() == ["started", "started"], "dead collector must restart exactly once" 
         assert ("-T 200" in (d / "args").read_text()) == modern
         assert not (d / "premature").exists()
+        assert not (d / "orphan-violation").exists(), "must not start or publish while foreign writer exists"
         assert (native / "session-001.native.log").read_text() == "native\n"
         assert (native / "session-001.native-ready").read_text().strip() == "ready"
         assert not dest.exists(), "native collector must not write USB"

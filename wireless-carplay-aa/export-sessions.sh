@@ -7,6 +7,30 @@ native_dir=/data/hmgapi/logs/wcp-native-session
 mkdir -p "$native_dir" || exit 1
 native_pid=
 native_session=
+proc_root=/proc
+# An abandoned logcat may still own the output after an abnormal supervisor exit.
+# Do not signal an unowned PID (PID reuse is possible). Refuse to start a second
+# collector or publish readiness until the matching writer has disappeared.
+foreign_writer() {
+    for entry in "$proc_root"/[0-9]*; do
+        [ -d "$entry" ] || continue
+        pid=${entry##*/}
+        [ "$pid" != "$native_pid" ] || continue
+        executable=$(readlink "$entry/exe" 2>/dev/null) || continue
+        case "$executable" in
+            */logcat) ;;
+            *) continue ;;
+        esac
+        for fd in "$entry"/fd/*; do
+            output=$(readlink "$fd" 2>/dev/null) || continue
+            case "$output" in
+                "$native_dir"/session-*.native.log|"$native_dir"/session-*.native.log.[123]) return 0 ;;
+            esac
+        done
+    done
+    return 1
+}
+foreign_reported=0
 retry_ticks=0
 retry_delay=1
 healthy_ticks=0
@@ -62,6 +86,17 @@ start_native() {
 # The DiPO journal creates a per-session marker only when carplay_log is enabled.
 
 while true; do
+    # Scan only while we do not own a running collector, including startup and
+    # finalization. Never certify a native file with an unowned writer present.
+    if [ -z "$native_pid" ] && foreign_writer; then
+        if [ "$foreign_reported" -eq 0 ]; then
+            echo "Native collector suspended: unowned logcat writer detected" >&2
+            foreign_reported=1
+        fi
+        sleep 2
+        continue
+    fi
+    foreign_reported=0
     current=
     for marker in "$source_dir"/session-*.native-enabled; do
         [ -f "$marker" ] && [ ! -L "$marker" ] || continue
@@ -104,6 +139,10 @@ while true; do
         fi
     fi
     # Publish readiness only after logcat has stopped writing the session.
+    if [ -z "$native_pid" ] && foreign_writer; then
+        sleep 2
+        continue
+    fi
     for file in "$native_dir"/session-*.native.log; do
         [ -f "$file" ] && [ ! -L "$file" ] || continue
         name=${file##*/}; base=${name%.native.log}
