@@ -12,6 +12,9 @@ final class IdentityInstaller {
     private static boolean loaded;
     private static volatile boolean armed;
     private static boolean suspended, shutdownPending;
+    private static boolean resumeRetry;
+    private static int resumeAttempts;
+    private static final int MAX_RESUME_ATTEMPTS=5;
     private static long armedGeneration=-1;
     private static byte[] lastStart;
     private static final StartWithdrawal withdrawal=new StartWithdrawal();
@@ -84,7 +87,7 @@ final class IdentityInstaller {
     private static synchronized void apply(ModContext mod, LoadedApp app, IdentityRegistry registry) {
         if(!mod.enabled()){suspend(mod,registry);return;}
         if(shutdownPending && !finishShutdown(mod))return;
-        if(suspended){registry.setSuspended(false);suspended=false;}
+        if(suspended){registry.setSuspended(false);suspended=false;resumeRetry=true;resumeAttempts=0;}
         IdentityRegistry.Snapshot snapshot=registry.snapshot();
         CarPlayIdentification.VehicleIdentity vehicle=snapshot.vehicle;
         CarPlayIdentification.ThemeIdentity theme=snapshot.theme;
@@ -94,7 +97,7 @@ final class IdentityInstaller {
         if(loaded) NativeIdentity.shutdown();
         lastStart=null;
         withdrawal.setPending(loaded);
-        if(vehicle==null && theme==null) return;
+        if(vehicle==null && theme==null){resumeRetry=false;return;}
         int dcType = -1, dcPower = 0, acType = -1, acPower = 0;
         if (vehicle != null) {
             for (CarPlayIdentification.Connector connector : vehicle.connectors) {
@@ -122,6 +125,7 @@ final class IdentityInstaller {
             }
             withdrawal.setPending(false); // successful native configure clears its payload
             armed = true;
+            resumeRetry=false;
             armedGeneration=snapshot.generation;
             mod.log("CarPlay identity: generation="+armedGeneration+" armed");
             if (theme != null) {
@@ -134,7 +138,9 @@ final class IdentityInstaller {
         }
         } catch(Throwable error) {
             armed=false; armedGeneration=-1; lastStart=null; withdrawal.setPending(loaded);
-            if(loaded) try { NativeIdentity.shutdown(); } catch(Throwable ignored) {}
+            if(loaded){shutdownPending=true;finishShutdown(mod);}
+            // Only retry the known transient native-gate error automatically.
+            if(!(error instanceof NativeFailure) || ((NativeFailure)error).code!=-21)resumeRetry=false;
             registry.report(snapshot.generation,CarPlayIdentification.Readiness.FAILED,
                     error instanceof NativeFailure ? "native configure="+((NativeFailure)error).code : error.getClass().getSimpleName());
             throw error;
@@ -144,6 +150,7 @@ final class IdentityInstaller {
     private static synchronized void suspend(ModContext mod,IdentityRegistry registry) {
         if(!suspended){
             suspended=true;
+            resumeRetry=false;resumeAttempts=0;
             registry.setSuspended(true);
             armed=false;armedGeneration=-1;
             lastStart=null;
@@ -237,10 +244,19 @@ final class IdentityInstaller {
                     while (!Thread.currentThread().isInterrupted()) {
                         synchronized(IdentityInstaller.class){
                             if(!mod.enabled())suspend(mod,registry);
-                            else if(suspended){
-                                try{apply(mod,app,registry);}
-                                catch(Throwable t){failure(mod,"CarPlay identity resume",t);}
-                            }else refreshStart(mod,app,registry);
+                            else if(suspended || resumeRetry){
+                                if(!suspended && resumeAttempts>=MAX_RESUME_ATTEMPTS){
+                                    resumeRetry=false;
+                                    mod.log("CarPlay identity: automatic resume retries exhausted; next connection may retry");
+                                }else{
+                                    try{apply(mod,app,registry);}
+                                    catch(Throwable t){failure(mod,"CarPlay identity resume",t);}
+                                    if(resumeRetry)resumeAttempts++;
+                                }
+                            }else{
+                                if(shutdownPending)finishShutdown(mod);
+                                refreshStart(mod,app,registry);
+                            }
                         }
                         synchronized (IdentityInstaller.class) {
                             if (loaded) {
