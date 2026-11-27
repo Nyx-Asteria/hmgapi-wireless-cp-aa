@@ -71,15 +71,13 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
         u32 n=0;const Param *stock=stock_children(id,type,(u16*)&n,key,more);
         if(!stock || n>WIRELESS_MAX){*count=(u16)n;return stock;}
         identity_seen|=2;
-        /* LIVI advertises only the asset identifier in transport group 24,
-           parameter 6. Preserve stock parameter 5 and avoid duplicate 6. */
-        if(legacy_theme){
-            for(u32 i=0;i<n;i++)wireless_copy[i]=stock[i];
-            wireless_copy[n]=parameter(5,12);wireless_copy[n+1]=parameter(6,10);
-            *count=(u16)(n+2);if(more)*more=0;return wireless_copy;
-        }
+        /* Legacy K5 format owns parameters 5/6; asset-only mode owns
+           parameter 6 and leaves stock parameter 5 intact. Replace rather
+           than append duplicate IDs if the OEM already supplies them. */
         u32 used=0;
-        for(u32 i=0;i<n;i++)if(stock[i].id!=6)wireless_copy[used++]=stock[i];
+        for(u32 i=0;i<n;i++)
+            if(stock[i].id!=6 && !(legacy_theme && stock[i].id==5))wireless_copy[used++]=stock[i];
+        if(legacy_theme)wireless_copy[used++]=parameter(5,12);
         wireless_copy[used++]=parameter(6,10);
         *count=(u16)used;if(more)*more=0;return wireless_copy;
     }
@@ -159,8 +157,8 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     start_clear_locked();
     __atomic_store_n(&identity_built,0,__ATOMIC_RELEASE);
     has_vehicle=vehicle;has_ev=ev;has_theme=themed;legacy_theme=themed && legacy;
-    /* API v2 still accepts the complete tuple; identification carries only
-       its asset identifier. StartSessionCodec carries version and SDK. */
+    /* Legacy identification carries the full tuple; asset-only mode
+       carries just its identifier. StartSessionCodec carries version/SDK. */
     u32 asset_len=0;
     while(asset_len<theme_len && (legacy_theme || theme_id[asset_len]!=':'))asset_len++;
     copy(theme,theme_id,asset_len);theme[asset_len]=0;
