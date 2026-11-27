@@ -77,6 +77,21 @@ public final class SessionLogWriterTest {
             check(!SessionLogWriter.verifiedMarker(markerDir));
             SessionLogWriter.writeText(marker,"verified\n");
             check(SessionLogWriter.verifiedMarker(markerDir));
+            File unavailable=new File(root,"unavailable");SessionLogWriter.writeText(unavailable,"not a directory");
+            final java.util.List<String> health=java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+            SessionLogWriter retry=new SessionLogWriter(unavailable,null,java.util.EnumSet.noneOf(SessionLogPolicy.Category.class),
+                new SessionLogWriter.Health(){public void changed(String state){health.add(state);}});
+            retry.start(200,"unavailable");
+            retry.finish(200,"end",0);
+            long deadline=System.currentTimeMillis()+5000;
+            while(health.isEmpty()&&System.currentTimeMillis()<deadline)Thread.sleep(20);
+            check(!health.isEmpty()&&!health.get(0).equals("ready"));
+            check(unavailable.delete()&&unavailable.mkdir());
+            retry.start(201,"recovered");
+            retry.record(201,INFO,CORE,"recording resumed");
+            retry.finish(201,"end",0);
+            retry.shutdown();check(retry.await(10000));check(retry.failure()==null);
+            check(health.contains("ready"));
             System.out.println("SessionLogWriterTest passed");
         }finally{SessionLogWriter.delete(root);}
     }

@@ -18,7 +18,14 @@ final class SessionRecording {
         this.focused=focused;
         policy=new SessionLogPolicy(SessionLogPolicy.diagnosticCategories(true,false));
         writer=new SessionLogWriter(new File(context.getFilesDir(),folder),null,
-                SessionLogPolicy.diagnosticCategories(true,false));
+                SessionLogPolicy.diagnosticCategories(true,false),new SessionLogWriter.Health(){
+                    public void changed(String state){
+                        // Independent of the session spool and its policy.
+                        String message="Session recorder "+folder+": "+SessionLogPolicy.sanitize(state);
+                        if("ready".equals(state))android.util.Log.i("HMG-API",message);
+                        else android.util.Log.e("HMG-API",message);
+                    }
+                });
     }
     synchronized void beginAttempt(String detail) {
         end("superseded by next attempt");

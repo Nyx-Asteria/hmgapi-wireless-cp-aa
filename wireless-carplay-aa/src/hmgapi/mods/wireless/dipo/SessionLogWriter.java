@@ -37,6 +37,17 @@ final class SessionLogWriter {
     private AtomicLong activeDrops = new AtomicLong();
     private final Thread worker;
     private volatile String failure;
+    private final Health health;
+    interface Health { void changed(String state); }
+    // Observer executes only on the writer thread, never while projection holds
+    // the admission lock. Health reporting must not kill recording.
+    private String reported;
+    private void reportHealth() {
+        String state=failure==null?"ready":failure;
+        if(state.equals(reported))return;
+        reported=state;
+        if(health!=null)try{health.changed(state);}catch(RuntimeException ignored){}
+    }
     private volatile boolean closed;
     private File directory;
     private FileOutputStream normal, errors;
@@ -63,7 +74,11 @@ final class SessionLogWriter {
     SessionLogWriter(File root) { this(root,null); }
     SessionLogWriter(File root, Exporter exporter) { this(root,exporter,EnumSet.noneOf(SessionLogPolicy.Category.class)); }
     SessionLogWriter(File root, Exporter exporter, EnumSet<SessionLogPolicy.Category> enabledDiagnostics) {
+        this(root,exporter,enabledDiagnostics,null);
+    }
+    SessionLogWriter(File root, Exporter exporter, EnumSet<SessionLogPolicy.Category> enabledDiagnostics, Health health) {
         this.root=root;
+        this.health=health;
         this.enabledDiagnostics=enabledDiagnostics.clone();
         this.exporter=exporter;
         worker=new Thread(new Runnable(){ public void run(){ loop(); } }, "wcp-session-log");
@@ -124,11 +139,13 @@ final class SessionLogWriter {
     private void loop() {
         long last=androidIndependentMonotonic();
         try {
-            ensureDir(root);
+            // Initial storage failure must not permanently stop the worker.
+            try { ensureDir(root); } catch(IOException ex) { failure="spool initialization failed: "+ex.getClass().getSimpleName(); }
             try { recover(root); } catch(IOException ex) { failure=ex.getMessage(); }
             spoolReady=true;
             requestExport();
             try { prune(false); } catch(IOException ex) { failure=ex.getMessage(); }
+            reportHealth();
             while(!closed || !queue.isEmpty()) {
                 Event e=queue.poll(250,TimeUnit.MILLISECONDS);
                 if(e!=null) {
@@ -144,6 +161,7 @@ final class SessionLogWriter {
                         failure=ex.toString(); abandon();
                     }
                 }
+                reportHealth();
                 long now=androidIndependentMonotonic();
                 if(now-last>=5000) {
                     try { sync(); } catch(IOException ex){ failure=ex.toString(); abandon(); }
@@ -152,10 +170,11 @@ final class SessionLogWriter {
             }
             if(directory!=null) complete(System.currentTimeMillis(),"logger shutdown; session end not observed");
         } catch(Exception e) { failure=e.toString(); }
-        finally { abandon(); }
+        finally { reportHealth(); abandon(); }
     }
     private static long androidIndependentMonotonic(){ return System.nanoTime()/1000000L; }
     private void begin(Event e) throws IOException {
+        ensureDir(root);
         try { recover(root); } catch(IOException ex) { failure=ex.getMessage(); }
         prune(true);
         milestones.clear(); eventCounts.clear(); warningCount=errorCount=0;
@@ -171,6 +190,7 @@ final class SessionLogWriter {
         writeText(new File(directory,"summary.txt"),"generation="+generation+"\nstart_ms="+start+"\n"+e.text+"\n");
         append(new Event(0,e.time,generation,"INFO CORE session started",false));
         sync();
+        failure=null;
     }
     private void append(Event e) throws IOException {
         summarize(e);
