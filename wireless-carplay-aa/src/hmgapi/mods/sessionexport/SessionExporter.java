@@ -71,15 +71,21 @@ public final class SessionExporter {
         File[] files = source.listFiles();
         if (files == null) throw new IOException("cannot list journals");
         Arrays.sort(files);
+        Exception failure = null;
         for (File src : files) {
             String name = src.getName();
             if (!name.matches("session-[a-zA-Z0-9-]+\\.log")) continue;
-            if (!src.isFile() || !child(source, name).equals(src.getCanonicalFile())) continue;
-            directory(root);
-            File dest = child(root, kind);
-            directory(dest);
-            exportOne(src, dest);
+            try {
+                if (!src.isFile() || !child(source, name).equals(src.getCanonicalFile())) continue;
+                directory(root);
+                File dest = child(root, kind);
+                directory(dest);
+                exportOne(src, dest);
+            } catch (Exception e) {
+                if (failure == null) failure = e;
+            }
         }
+        if (failure != null) throw failure;
     }
 
     static void exportOne(File source, File dest) throws Exception {
