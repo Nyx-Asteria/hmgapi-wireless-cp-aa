@@ -16,7 +16,33 @@ public final class SessionExporterTest {
         if (children != null) for (File c : children) remove(c);
         f.delete();
     }
+
+    static String hex(byte[] bytes) {
+        StringBuilder out=new StringBuilder();
+        for(byte b:bytes) out.append(String.format("%02x",b&255));
+        return out.toString();
+    }
+    static void hashRegression() throws Exception {
+        check(hex(SessionExporter.digest(new byte[0])).equals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),"empty SHA-256");
+        check(hex(SessionExporter.digest("abc".getBytes("UTF-8"))).equals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),"abc SHA-256");
+        byte[] million=new byte[1000000];Arrays.fill(million,(byte)'a');
+        check(hex(SessionExporter.digest(million)).equals("cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"),"million a SHA-256");
+        java.util.Random rng=new java.util.Random(12345);
+        for(int len:new int[]{1,55,56,57,63,64,65,119,120,127,128,129,32767,32768,32769,4194304}){
+            byte[] data=new byte[len];rng.nextBytes(data);
+            byte[] expected=java.security.MessageDigest.getInstance("SHA-256").digest(data);
+            check(Arrays.equals(expected,SessionExporter.digest(data)),"one-shot boundary "+len);
+            SessionExporter.Sha256 stream=new SessionExporter.Sha256();
+            for(int off=0;off<len;){int n=Math.min(37,len-off);stream.update(data,off,n);off+=n;}
+            check(Arrays.equals(expected,stream.digest()),"stream boundary "+len);
+        }
+    }
     public static void main(String[] args) throws Exception {
+        hashRegression();
+        // Remove every JCA provider during the actual export regression.
+        java.security.Provider[] providers=java.security.Security.getProviders();
+        for(java.security.Provider provider:providers) java.security.Security.removeProvider(provider.getName());
+        try {
         File root = Files.createTempDirectory("java-session-export").toFile();
         try {
             File spool = new File(root, "spool"), usb = new File(root, "usb");
@@ -161,5 +187,6 @@ public final class SessionExporterTest {
             } finally { SessionExporter.directorySync = original; }
             System.out.println("Java session export tests passed");
         } finally { remove(root); }
+    } finally { for(java.security.Provider provider:providers) java.security.Security.addProvider(provider); }
     }
 }
