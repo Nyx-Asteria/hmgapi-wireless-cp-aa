@@ -35,6 +35,11 @@ public final class SessionExporter {
                             try { exportDirectory(new File(files, "stbt-third-party-navigation"), dest, "third-party-navigation", guard); }
                             catch (Exception e) { if (first == null) first = e; }
                         }
+                        if (wcp) {
+                            try { exportNative(new File("/data/hmgapi/logs/wcp-native-session"),
+                                    new File(files, "wcp-carplay-sessions"), dest, guard); }
+                            catch (Exception e) { if (first == null) first = e; }
+                        }
                         if (first != null) throw first;
                     } catch (Exception e) { error = e.toString(); }
                 }
@@ -117,6 +122,32 @@ public final class SessionExporter {
             } catch (Exception e) {
                 if (failure == null) failure = e;
             }
+        }
+        if (failure != null) throw failure;
+    }
+
+    /** Only stopped, opted-in native collectors publish readiness markers. */
+    static void exportNative(File source, File journals, File root, Guard guard) throws Exception {
+        if (!source.isDirectory()) return;
+        File[] files = source.listFiles();
+        if (files == null) throw new IOException("cannot list native journals");
+        Arrays.sort(files);
+        Exception failure = null;
+        for (File src : files) {
+            String name = src.getName();
+            if (!name.matches("session-[a-zA-Z0-9-]+\\.native\\.log(\\.[123])?")) continue;
+            String base = name.substring(0, name.indexOf(".native.log"));
+            try {
+                File ready = child(source, base + ".native-ready");
+                if (!ready.isFile() || new File(journals, base + ".active").exists()) continue;
+                if (!src.isFile() || !child(source, name).equals(src.getCanonicalFile())) continue;
+                guard.check();
+                directory(root);
+                File dest = child(root, "sessions");
+                guard.check();
+                directory(dest);
+                exportOne(src, dest, guard);
+            } catch (Exception e) { if (failure == null) failure = e; }
         }
         if (failure != null) throw failure;
     }
