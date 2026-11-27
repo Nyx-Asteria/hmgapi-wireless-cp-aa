@@ -90,6 +90,22 @@ public final class SessionExporterTest {
             put(mounts, "device " + usb.getCanonicalPath() + " vfat rw 0 0\n");
             SessionExporter.exportOne(removable, dest, new SessionExporter.MountGuard(usb, mounts));
             check(new File(dest, removable.getName()).isFile(), "export resumes on mounted USB");
+            File nativeSpool = new File(root, "native");
+            check(nativeSpool.mkdir(), "native spool");
+            put(new File(nativeSpool, "session-101.native.log"), "native base");
+            put(new File(nativeSpool, "session-101.native.log.1"), "native rotation");
+            put(new File(nativeSpool, "session-102.native.log"), "unfinished");
+            put(new File(nativeSpool, "session-103.native.log"), "still active");
+            put(new File(nativeSpool, "session-101.native-ready"), "ready");
+            put(new File(nativeSpool, "session-103.native-ready"), "ready");
+            put(new File(spool, "session-103.active"), "START");
+            put(new File(nativeSpool, "session-101.native.log.4"), "unsupported rotation");
+            SessionExporter.exportNative(nativeSpool, spool, logs, new SessionExporter.MountGuard(usb, mounts));
+            check(new File(dest, "session-101.native.log.complete").isFile(), "native base verified");
+            check(new File(dest, "session-101.native.log.1.complete").isFile(), "rotation verified");
+            check(!new File(dest, "session-102.native.log").exists(), "unready native excluded");
+            check(!new File(dest, "session-103.native.log").exists(), "active native excluded");
+            check(!new File(dest, "session-101.native.log.4").exists(), "unexpected rotation excluded");
             System.out.println("Java session export tests passed");
         } finally { remove(root); }
     }

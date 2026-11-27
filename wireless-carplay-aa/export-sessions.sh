@@ -2,7 +2,6 @@
 # Copy only finalized journals; leave originals available until bounded local retention expires.
 umask 077
 source_dir=/data/data/com.daudio.app.dipo/files/wcp-carplay-sessions
-usb_name=WCP-LOGS
 # Native logger is independent of HMG-API Report a problem / Java heap.
 native_dir=/data/hmgapi/logs/wcp-native-session
 mkdir -p "$native_dir" || exit 1
@@ -25,7 +24,7 @@ prune_native() {
         [ -f "$file" ] || continue
         name=${file##*/}; base=${name%.native.log}
         [ "$base" != "$native_session" ] || continue
-        rm -f "$file" "$file.1" "$file.2" "$file.3"
+        rm -f "$file" "$file.1" "$file.2" "$file.3" "$native_dir/$base.native-ready"
         count=$((count - 1))
     done
 }
@@ -57,31 +56,21 @@ while true; do
         [ -z "$current" ] || start_native "$current"
         prune_native
     fi
-    for root in /storage/usb0 /storage/usb1 /storage/usb2; do
-        [ -d "$root" ] || continue
-        # Require a mounted volume, not an empty internal mountpoint.
-        canonical=$(cd "$root" 2>/dev/null && pwd -P)
-        [ -n "$canonical" ] || continue
-        grep -F " $root " /proc/mounts >/dev/null 2>&1 ||
-            grep -F " $canonical " /proc/mounts >/dev/null 2>&1 || continue
-        dest="$root/$usb_name/sessions"
-        [ ! -L "$root/$usb_name" ] && [ ! -L "$dest" ] || continue
-        mkdir -p "$dest" || continue
-        # Java service owns finalized Java journals; this collector exports native logs only.
-        for src in "$native_dir"/session-*.native.log*; do
-            [ -f "$src" ] && [ ! -L "$src" ] || continue
-            name=${src##*/}; base=${name%%.native.log*}
-            [ "$base" != "$native_session" ] || continue
-            [ ! -L "$dest/$name" ] && [ ! -L "$dest/$name.part" ] || continue
-            [ -f "$dest/$name" ] && continue
-            # Native logs are explicitly opt-in and can contain personal device details.
-            # Do not pretend to redact on firmware without the necessary tools.
-            if cat "$src" > "$dest/$name.part" && cmp "$src" "$dest/$name.part" >/dev/null 2>&1; then
-                mv "$dest/$name.part" "$dest/$name" || rm -f "$dest/$name.part"
-            else
-                rm -f "$dest/$name.part"
-            fi
-        done
+    # Recover a dead collector while its opted-in session remains active.
+    if [ -n "$current" ] && [ "$current" = "$native_session" ] &&
+        [ -n "$native_pid" ] && ! kill -0 "$native_pid" 2>/dev/null; then
+        wait "$native_pid" 2>/dev/null
+        native_pid=
+        start_native "$current"
+    fi
+    # Publish readiness only after logcat has stopped writing the session.
+    for file in "$native_dir"/session-*.native.log; do
+        [ -f "$file" ] && [ ! -L "$file" ] || continue
+        name=${file##*/}; base=${name%.native.log}
+        [ "$base" != "$native_session" ] || continue
+        [ ! -f "$source_dir/$base.active" ] || continue
+        [ ! -L "$native_dir/$base.native-ready" ] || continue
+        [ -f "$native_dir/$base.native-ready" ] || echo ready > "$native_dir/$base.native-ready"
     done
     sleep 2
 done
