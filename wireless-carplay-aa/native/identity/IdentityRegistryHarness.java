@@ -63,6 +63,17 @@ public final class IdentityRegistryHarness {
         registry.registerTheme("fixture.theme",new CarPlayIdentification.ThemeIdentity("THEME1",985,"19.0"),true);
         check(registry.identityStatus().generation!=stable && changes[0]==1
                 && registry.identityStatus().readiness==CarPlayIdentification.Readiness.REGISTERED,"session opt-in change invalidates readiness");
+        long enabledGeneration=registry.identityStatus().generation;
+        registry.setSuspended(true);
+        long disabledGeneration=registry.identityStatus().generation;
+        check(disabledGeneration!=enabledGeneration && registry.identityStatus().readiness==CarPlayIdentification.Readiness.UNAVAILABLE,"disable invalidates readiness");
+        check(!registry.report(enabledGeneration,CarPlayIdentification.Readiness.ADVERTISED,"stale"),"old evidence rejected");
+        check(!registry.report(disabledGeneration,CarPlayIdentification.Readiness.ARMED,"disabled"),"disabled reports rejected");
+        check(registry.snapshot().theme!=null && registry.snapshot().vehicle!=null && registry.snapshot().start,"contributions retained");
+        registry.setSuspended(true);
+        check(registry.identityStatus().generation==disabledGeneration,"repeated disable idempotent");
+        registry.setSuspended(false);
+        check(registry.identityStatus().generation!=disabledGeneration && registry.identityStatus().readiness==CarPlayIdentification.Readiness.REGISTERED,"resume requires new evidence");
         IdentityRegistry.Snapshot snapshot=registry.snapshot();
         check(snapshot.generation==registry.identityStatus().generation && snapshot.vehicle!=null && snapshot.theme!=null,"atomic snapshot");
         registry.removeTheme("fixture.theme");
