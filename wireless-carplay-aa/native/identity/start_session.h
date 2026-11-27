@@ -88,8 +88,14 @@ static int start_append(Blob stock,unsigned char *buf,int cap,u32 id,u32 x,u32 y
     if(!stock)return -1;
     int n=stock(buf,cap,id,x,y);
     if(n<0)return n;
+    // Only extend complete 16-bit ID lists. The sizing pass reserves
+    // an upper bound because OEM contents are not yet available.
+    if(!start_len || (n&1) || n>2147483645)return n;
     if(!buf)return n+2;
-    if(cap<n || cap-n<2)return n;
+    if(cap<n)return n;
+    for(int i=0;i<n;i+=2)
+        if(buf[i]==0x43 && buf[i+1]==last)return n;
+    if(cap-n<2)return n;
     buf[n]=0x43;buf[n+1]=last;return n+2;
 }
 static int start_sent_blob(unsigned char *buf,int cap,u32 id,u32 x,u32 y){

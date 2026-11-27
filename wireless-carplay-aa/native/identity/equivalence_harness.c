@@ -83,6 +83,14 @@ static void fixture_destroy(void *p){
 static void *fixture_malloc(u32 n,const char *name,u32 flag){
     (void)n;(void)name;(void)flag;fixture_malloc_calls++;return 0;
 }
+static int fixture_blob_size=4;
+static unsigned char fixture_blob_bytes[4]={0x1d,0x01,0x43,0x01};
+static int fixture_blob(unsigned char *buf,int cap,u32 id,u32 x,u32 y){
+    (void)id;(void)x;(void)y;
+    if(buf && cap>=fixture_blob_size && fixture_blob_size>=0 && fixture_blob_size<=4)
+        for(int i=0;i<fixture_blob_size;i++)buf[i]=fixture_blob_bytes[i];
+    return fixture_blob_size;
+}
 static void semihost(u32 operation,const void *argument);
 int test_main(void){
     root[0]=parameter(20,13);root[0].children=(u32)identity_children;
@@ -166,6 +174,25 @@ int test_main(void){
        || theme_tuple_ok("A:1:",4)
        || theme_tuple_ok("A.B:1:1",7)
        || theme_tuple_ok("A:1:1:2",7))result|=1;
+    // Preserve OEM capability IDs; append only while a response is armed.
+    unsigned char capabilities[8]={0};
+    start_len=6;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=6)result|=1;
+    if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=4
+       || capabilities[0]!=0x1d || capabilities[1]!=1 || capabilities[2]!=0x43 || capabilities[3]!=1)result|=1;
+    if(start_append(fixture_blob,capabilities,8,0,0,0,0)!=6
+       || capabilities[4]!=0x43 || capabilities[5]!=0)result|=1;
+    if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)result|=1;
+    fixture_blob_size=3;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=3
+       || start_append(fixture_blob,capabilities,8,0,0,0,1)!=3)result|=1;
+    fixture_blob_size=-1;
+    if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=-1)result|=1;
+    fixture_blob_size=2147483647;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=2147483647)result|=1;
+    fixture_blob_size=4;start_clear_locked();
+    if(start_append(fixture_blob,0,0,0,0,0,0)!=4
+       || start_append(fixture_blob,capabilities,8,0,0,0,0)!=4)result|=1;
     /* Framing of top-level and nested codec parameters. */
     static const unsigned char framed[]={0,9,0,1,0,5,0,0,'S',0,4,0,99};
     static const unsigned char short_header[]={0,4,0};
