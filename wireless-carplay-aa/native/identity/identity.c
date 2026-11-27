@@ -21,7 +21,7 @@ static int (*protect_page)(void *,u32,int);
 static Mutex lock_mutex,unlock_mutex;
 static u32 identity_mutex;
 static int configured,has_vehicle,has_theme,legacy_theme,has_ev;
-static u32 identity_built, identity_seen;
+static u32 identity_built, identity_seen, identity_evidence;
 static int theme_children_active;
 static char display_name[321];
 static char theme[97];
@@ -122,6 +122,8 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
     u32 result=raw_builder(handle,session,a,b,command,root,24,name,identity_value);
     /* A selected child table alone is not evidence of serialized identity. */
     u32 required=(has_vehicle?5:0)|(has_theme?2:0);
+    if(result)__atomic_store_n(&identity_evidence,identity_seen,__ATOMIC_RELEASE);
+    else __atomic_store_n(&identity_evidence,0,__ATOMIC_RELEASE);
     if(result && required && (identity_seen&required)==required)
         __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
     build_lookup=0;stock_wireless_lookup=0;
@@ -194,6 +196,7 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     if(lock_mutex(&identity_mutex))return -15;
     start_clear_locked();
     __atomic_store_n(&identity_built,0,__ATOMIC_RELEASE);
+    __atomic_store_n(&identity_evidence,0,__ATOMIC_RELEASE);
     has_vehicle=vehicle;has_ev=ev;has_theme=themed;legacy_theme=themed && legacy;
     /* Legacy identification carries the full tuple; asset-only mode
        carries just its identifier. StartSessionCodec carries version/SDK. */
@@ -228,6 +231,7 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_configure(JNIEnv
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_shutdown(JNIEnv *env,jclass cls){
     (void)env;(void)cls;__atomic_store_n(&configured,0,__ATOMIC_RELEASE);
     __atomic_store_n(&identity_built,0,__ATOMIC_RELEASE);
+    __atomic_store_n(&identity_evidence,0,__ATOMIC_RELEASE);
     if(!hook_mailbox)return 0; // No gate has been bound.
     if(!lock_mutex || !unlock_mutex)return -18;
     if(lock_mutex(&identity_mutex))return -15;
@@ -250,6 +254,11 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSession(JNI
 JNIEXPORT jboolean JNICALL Java_hmgapi_mods_wireless_NativeIdentity_identityBuilt(JNIEnv *env,jclass cls){
     (void)env;(void)cls;
     return __atomic_load_n(&configured,__ATOMIC_ACQUIRE) && __atomic_load_n(&identity_built,__ATOMIC_ACQUIRE);
+}
+JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(JNIEnv *env,jclass cls){
+    (void)env;(void)cls;
+    if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE))return 0;
+    return (int)__atomic_load_n(&identity_evidence,__ATOMIC_ACQUIRE);
 }
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(JNIEnv *env,jclass cls,jint which){
     (void)env;(void)cls;
