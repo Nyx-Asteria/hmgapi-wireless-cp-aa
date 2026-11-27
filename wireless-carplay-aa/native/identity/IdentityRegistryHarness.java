@@ -41,6 +41,12 @@ public final class IdentityRegistryHarness {
             new CarPlayIdentification.VehicleIdentity("Invalid EV",CarPlayIdentification.VehicleIdentity.ENGINE_ELECTRIC,new CarPlayIdentification.Connector[0]);
             throw new AssertionError("empty EV connectors accepted");
         } catch(IllegalArgumentException expected){}
+        CarPlayIdentification.IdentityStatus before=registry.identityStatus();
+        check(before.readiness==CarPlayIdentification.Readiness.REGISTERED,"registration not activation");
+        check(registry.report(before.generation,CarPlayIdentification.Readiness.ARMED,"fixture"),"current generation accepted");
+        registry.registerTheme("fixture.theme",new CarPlayIdentification.ThemeIdentity("THEME1",985,"19.0"));
+        check(!registry.report(before.generation,CarPlayIdentification.Readiness.ADVERTISED,"stale"),"stale generation rejected");
+        check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.REGISTERED,"new contribution invalidates armed state");
         System.out.println("PASS mock mods compose independent vehicle and theme contributions");
     }
 

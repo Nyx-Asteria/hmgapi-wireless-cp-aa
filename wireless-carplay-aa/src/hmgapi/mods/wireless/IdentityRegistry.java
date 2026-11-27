@@ -13,6 +13,23 @@ final class IdentityRegistry implements CarPlayIdentification {
     private Runnable changed;
     private boolean sessionStart;
     private Logger logger;
+    private long generation;
+    private IdentityStatus status=new IdentityStatus(0,Readiness.UNAVAILABLE,"no contributions");
+
+    @Override public synchronized IdentityStatus identityStatus() { return status; }
+
+    private void invalidate() {
+        generation++;
+        status=new IdentityStatus(generation,vehicles.isEmpty() && themes.isEmpty()
+                ? Readiness.UNAVAILABLE : Readiness.REGISTERED,"contributions changed");
+    }
+
+    /** A delayed native callback cannot mark a newer contribution as active. */
+    synchronized boolean report(long expected, Readiness readiness, String reason) {
+        if(expected!=generation) return false;
+        status=new IdentityStatus(generation,readiness,reason);
+        return true;
+    }
 
     @Override
     public void registerVehicle(String modId, VehicleIdentity vehicle) {
@@ -23,7 +40,7 @@ final class IdentityRegistry implements CarPlayIdentification {
         synchronized (this) {
             if (!vehicles.isEmpty() && !vehicles.containsKey(modId))
                 throw new IllegalStateException("CarPlay vehicle identity already belongs to " + vehicles.keySet());
-            vehicles.put(modId, vehicle); notify = changed;
+            vehicles.put(modId, vehicle); invalidate(); notify = changed;
         }
         if (notify != null) notify.run();
     }
@@ -33,7 +50,7 @@ final class IdentityRegistry implements CarPlayIdentification {
         checkModId(modId);
         log("API request from " + modId + ": remove vehicle identity");
         Runnable notify;
-        synchronized (this) { vehicles.remove(modId); notify = changed; }
+        synchronized (this) { if(vehicles.remove(modId)!=null) invalidate(); notify = changed; }
         if (notify != null) notify.run();
     }
 
@@ -51,7 +68,7 @@ final class IdentityRegistry implements CarPlayIdentification {
         synchronized (this) {
             if (!themes.isEmpty() && !themes.containsKey(modId))
                 throw new IllegalStateException("CarPlay theme identity already belongs to " + themes.keySet());
-            themes.put(modId, theme); sessionStart = start; notify = changed;
+            themes.put(modId, theme); sessionStart = start; invalidate(); notify = changed;
         }
         if (notify != null) notify.run();
     }
@@ -61,7 +78,7 @@ final class IdentityRegistry implements CarPlayIdentification {
         checkModId(modId);
         log("API request from " + modId + ": remove theme identity");
         Runnable notify;
-        synchronized (this) { if (themes.remove(modId) != null) sessionStart = false; notify = changed; }
+        synchronized (this) { if (themes.remove(modId) != null) { sessionStart = false; invalidate(); } notify = changed; }
         if (notify != null) notify.run();
     }
 
