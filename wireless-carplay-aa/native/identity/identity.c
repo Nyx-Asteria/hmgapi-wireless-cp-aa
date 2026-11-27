@@ -153,10 +153,12 @@ static int bind(void){
     if(!protect_page || !lock_mutex || !unlock_mutex)return -20;
     if(!raw_builder)return -21;
     if(!root_table || !root_lookup)return -22;
-    if(!info_lookup || !get_info)return -23;
-    if(!status_lookup || !get_status)return -24;
-    u32 n=0;info_table=get_info(&n);if(n!=5 || !info_table)return -25;
-    status_table=get_status(&n);if(n!=13 || !status_table)return -26;
+    // Vehicle tables are optional for a theme-only contribution. Validate
+    // their availability separately before configuring a vehicle profile.
+    u32 n=0;info_table=0;status_table=0;
+    if(info_lookup && get_info){const Param *p=get_info(&n);if(n==5)info_table=p;}
+    n=0;
+    if(status_lookup && get_status){const Param *p=get_status(&n);if(n==13)status_table=p;}
     start_bind(lib); /* optional, no change to stock identification if unavailable */
     return 0;
 }
@@ -188,6 +190,8 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     int vehicle=len!=0,themed=theme_len!=0;
     if(!vehicle && !themed)return -12;
     int ev=vehicle && engine_type==2;
+    if(vehicle && (!info_lookup || !info_table))return -23;
+    if(ev && (!status_lookup || !status_table))return -24;
     if(vehicle && (!string_ok(name,len) || len>320 || engine_type<0 || engine_type>3))return -12;
     if(ev && (dc_type<0 || dc_type>1 || ac_type!=2 || !dc || dc>1000000 || !ac || ac>1000000))return -12;
     if(vehicle && !ev && (dc_type!=-1 || ac_type!=-1 || dc || ac))return -12;
@@ -213,8 +217,10 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
         info_copy[5]=parameter(11,8);info_copy[5].init=(u32)connector_dc;
         info_copy[6]=parameter(11,8);info_copy[6].init=(u32)connector_ac;
         info_copy[7]=parameter(12,6);info_copy[8]=parameter(14,6);
-        for(u32 i=0;i<13;i++){status_copy[i]=status_table[i];u16 id=status_copy[i].id;if(id==3 || id==6 || id==11 || id==15)status_copy[i].used=1;}
-        status_copy[13]=parameter(21,12);status_copy[14]=parameter(30,12);
+        if(ev){
+            for(u32 i=0;i<13;i++){status_copy[i]=status_table[i];u16 id=status_copy[i].id;if(id==3 || id==6 || id==11 || id==15)status_copy[i].used=1;}
+            status_copy[13]=parameter(21,12);status_copy[14]=parameter(30,12);
+        }
     }
     __atomic_store_n(&configured,1,__ATOMIC_RELEASE);int result=set_handler((u32)identity_builder);
     if(result)__atomic_store_n(&configured,0,__ATOMIC_RELEASE);

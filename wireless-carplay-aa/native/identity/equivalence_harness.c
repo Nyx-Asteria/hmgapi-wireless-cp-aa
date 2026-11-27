@@ -277,6 +277,14 @@ int test_main(void){
        || start_sends!=before+2 || start_last!=1)result|=1;
     if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,7)!=1
        || Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,8)!=1)result|=1;
+    // Theme-only and gasoline contributions do not require EV status support.
+    info_table=0;status_table=0;
+    if(configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || !has_theme || has_vehicle)result|=1;
+    if(configure("Kia K5",6,0,-1,0,-1,0,"",0,0)!=-23)result|=1;
+    info_table=stock_info;
+    if(configure("Kia EV6",7,2,0,235000,2,10900,"",0,0)!=-24)result|=1;
+    if(configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || has_ev)result|=1;
+    status_table=stock_status;
     // A busy or failed identity lock cannot prevent stock identification.
     raw_builder=fallback_build;lock_mutex=mutex_fail;
     if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)result|=1;
