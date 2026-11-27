@@ -199,23 +199,44 @@ final class Bridge {
         }, SPP_CONNECT_DELAY_MS);
     }
 
-    static void onSppUp(final String addr) {
+    private static final java.util.concurrent.atomic.AtomicInteger btGeneration =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    private static boolean currentBtAttach(int generation, String addr) {
+        return btGeneration.get() == generation && sSession && addr.equals(sAddr)
+                && !sUsb && !sCpClient && !sCpWireless && enabled();
+    }
+
+    private static synchronized void failBtAttach(int generation) {
+        if (btGeneration.get() == generation) sSession = false;
+    }
+
+    static synchronized void onSppUp(final String addr) {
         if (addr == null || sSession) return;
         sAddr = addr;
         if (sCpClient || sCpWireless || !enabled() || sUsb) return;
         sSession = true;
+        final int generation = btGeneration.incrementAndGet();
         handler().post(new Runnable() {
             @Override
             public void run() {
                 try {
+                    if (!currentBtAttach(generation, addr)) {
+                        failBtAttach(generation);
+                        return;
+                    }
                     Context c = context;
                     if (c == null) {
                         log("no context, cannot start session");
-                        sSession = false;
+                        failBtAttach(generation);
                         return;
                     }
-                    // Restore direct OEM connectivity AP startup for K5 testing.
+                    // Keep the verified K5 connectivity AP startup sequence.
                     ensureHotspot(c);
+                    if (!currentBtAttach(generation, addr)) {
+                        failBtAttach(generation);
+                        return;
+                    }
                     Intent i = new Intent(ACTION_ATTACH);
                     i.setPackage(IAP2_PKG);
                     i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
@@ -224,7 +245,7 @@ final class Bridge {
                     c.sendBroadcast(i);
                     log("BT_ATTACHED sent for " + addr);
                 } catch (Throwable t) {
-                    sSession = false;
+                    failBtAttach(generation);
                     error("onSppUp", t);
                 }
             }
@@ -281,21 +302,15 @@ final class Bridge {
             byte[] b = new byte[len];
             System.arraycopy(data, 0, b, 0, len);
             if (!sCpClient) startCpClient("iAP2 data from CarPlay channel");
-            final IIap2Service s;
             synchronized (sPendingIn) {
-                // Decide whether to queue while holding the same lock used by the
-                // connection callback's drain. Otherwise a packet can be queued
-                // just after that callback drains the pending list.
-                s = sIap2;
-                if (!sCpConnected || s == null) {
-                    if (sPendingIn.size() < MAX_PENDING) sPendingIn.add(b);
-                    else diagnosticRxOverflow++;
+                if (!sCpClient || sUsb) return;
+                if (sPendingIn.size() >= MAX_PENDING) {
+                    diagnosticRxOverflow++;
                     return;
                 }
+                sPendingIn.add(b);
             }
-            // Never hold the pending-list monitor across Binder calls.
-            flushPending(s);
-            s.Iap2SvcTransportReadDone(b, len);
+            flushPending();
         } catch (Throwable t) {
             error("onCpIapIn", t);
         }
@@ -356,9 +371,11 @@ final class Bridge {
     }
 
     static void startCpClient(final String why) {
-        if (sCpClient) return;
-        sCpClient = true;
-        sCpConnected = false;
+        synchronized (Bridge.class) {
+            if (sCpClient || sUsb) return;
+            sCpClient = true;
+            sCpConnected = false;
+        }
         final String addr = sAddr;
         sCpSerial = addr;
         final int generation = attachGeneration.advance();
@@ -389,31 +406,33 @@ final class Bridge {
 
     static void onCpClientConnected() {
         sCpConnected = true;
-        IIap2Service s = sIap2;
-        if (s != null) flushPending(s);
+        flushPending();
     }
 
-    private static void flushPending(IIap2Service s) {
-        ArrayList<byte[]> all;
+    // Exactly one drain owner; callbacks can enqueue during Binder delivery.
+    private static boolean rxDraining;
+    private static void flushPending() {
         synchronized (sPendingIn) {
-            if (sPendingIn.isEmpty()) return;
-            all = new ArrayList<byte[]>(sPendingIn);
-            sPendingIn.clear();
+            if (rxDraining || !sCpConnected || sIap2 == null || !sCpClient || sUsb) return;
+            rxDraining = true;
         }
-        int delivered = 0, failed = 0;
-        long began = now();
-        for (byte[] b : all) {
+        while (true) {
+            final byte[] packet;
+            final IIap2Service service;
+            synchronized (sPendingIn) {
+                service = sIap2;
+                if (!sCpClient || sUsb || !sCpConnected || service == null || sPendingIn.isEmpty()) {
+                    rxDraining = false;
+                    return;
+                }
+                packet = sPendingIn.remove(0);
+            }
             try {
-                s.Iap2SvcTransportReadDone(b, b.length);
-                delivered++;
+                service.Iap2SvcTransportReadDone(packet, packet.length);
             } catch (Throwable t) {
-                failed++;
-                error("flushPending", t);
+                error("ordered receive delivery", t);
             }
         }
-        log("CarPlay buffered receive flush attempted=" + all.size()
-                + " returnedNormally=" + delivered + " threw=" + failed
-                + " elapsedMs=" + (now() - began));
     }
 
     private static Method nativeSend() {
@@ -618,8 +637,9 @@ final class Bridge {
         }
     }
 
-    static void onSppDown(String addr) {
+    static synchronized void onSppDown(String addr) {
         if (addr == null || !addr.equals(sAddr)) return;
+        btGeneration.incrementAndGet();
         if (sCpWireless) {
             sSession = false;
             startCpClient("bluetooth dropped during wireless CarPlay");
@@ -633,15 +653,18 @@ final class Bridge {
     }
 
     static void sendDetach() {
+        final int generation = btGeneration.get();
         handler().post(new Runnable() {
             @Override
             public void run() {
                 try {
+                    if (btGeneration.get() != generation || sCpClient || sCpWireless) return;
                     Context c = context;
                     if (c == null) return;
                     Intent i = new Intent(ACTION_DETACH);
                     i.setPackage(IAP2_PKG);
                     i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+                    if (btGeneration.get() != generation || sCpClient || sCpWireless) return;
                     c.sendBroadcast(i);
                     log("BT_DETACHED sent");
                 } catch (Throwable t) {
