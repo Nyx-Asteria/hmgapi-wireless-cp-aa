@@ -75,3 +75,9 @@ jobs:
           mkdir -p out/theme-archive
           javac --release 8 -d out/theme-archive wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/tests/ThemeArchiveCaptureTest.java
           java -cp out/theme-archive hmgapi.mods.wireless.ThemeArchiveCaptureTest
+
+      - name: Experimental decoded theme transfer regression
+        run: |
+          mkdir -p out/theme-session
+          javac --release 8 -d out/theme-session wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java
+          java -cp out/theme-session hmgapi.mods.wireless.ThemeTransferSessionTest

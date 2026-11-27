@@ -237,6 +237,9 @@ Parent 338b67bf49120c255627dff6de0bf9f95d281412. Actual modern sender/receiver d
 ## RC7 scope expansion — experimental theme archive receiver
 Parent da38841957d221fe98c00362c538d0481f1a499c. User reopened experimental FileTransfer implementation for this build. Added pure Java ThemeArchiveCapture quarantine sink and host regression wired into CI. No raw OPACK decoder, native RCS transport, runtime caller, setting, capability advertisement or installed-version claim. Prior scope-close decision superseded; compatibility gap remains. Primary identity 100%; experimental archive component started; transport/negotiation integration 0%; no vehicle validation or release. See docs/filetransfer-disposition.md. Next resolve exact decoded schema and authenticated receiver integration rather than legacy FTv2 translation.
 
+## RC7 FileTransfer — decoded dictionary receiver
+Parent d0e26a69292eb74c1f05360e2ef23574a27eeceb, CI green 46080393785. Rechecked actual carkitd sender and receiver schema. Added ThemeTransferSession and CI regression for header/payload validation, session ID isolation, metadata preservation and quarantine. No raw OPACK, runtime entrypoint, native RCS transport, capability changes or ACK; retained metadata is in memory only. Primary identity unchanged. Next bounded OPACK subset with independently verified fixtures, then actual native INFO/SETUP integration. No release or CPUL change.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
