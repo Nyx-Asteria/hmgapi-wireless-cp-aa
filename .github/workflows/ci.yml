@@ -87,3 +87,6 @@ jobs:
           mkdir -p out/theme-opack
           javac --release 8 -d out/theme-opack wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/tests/ThemeOpackTest.java
           java -cp out/theme-opack hmgapi.mods.wireless.ThemeOpackTest
+
+      - name: CPUL native ownership boundary regression
+        run: python3 wireless-carplay-aa/tests/cpul_native_ownership.py
