@@ -153,7 +153,7 @@ public final class Dipo {
         if (Points.has("dipo.carplay.session_created")) {
             m.hook(a.classLoader, "dipo.carplay.session_created", new MethodHook() {
                 @Override protected void beforeHookedMethod(Param p) {
-                    journal.start("session creation");
+                    journal.beginAttempt("session creation");
                     journal.record("MILESTONE session_created enter");
                 }
                 @Override protected void afterHookedMethod(Param p) {
@@ -174,7 +174,12 @@ public final class Dipo {
             }
         });
         m.hook(a.classLoader, "dipo.carplay.session_finalized", new MethodHook() {
+            @Override protected void beforeHookedMethod(Param p) {
+                journal.record("MILESTONE session_finalized enter type=" +
+                        (p.args.length > 0 ? p.args[0] : "unknown"));
+            }
             @Override protected void afterHookedMethod(Param p) {
+                journal.record("MILESTONE session_finalized " + (p.hasThrowable() ? "threw" : "returned"));
                 journal.end("session finalized type=" +
                         (p.args.length > 0 ? p.args[0] : "unknown"));
             }

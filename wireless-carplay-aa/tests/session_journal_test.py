@@ -36,7 +36,9 @@ public class JournalTest {
  public static void main(String[] args)throws Exception{
   File root=new File(args[0]); File dir=new File(root,"journal");dir.mkdirs();
   Files.write(new File(dir,"session-old.active").toPath(),"old\\n".getBytes("UTF-8"));
+  Files.write(new File(dir,"session-old.native-enabled").toPath(),"enabled".getBytes("UTF-8"));
   SessionJournal j=new SessionJournal(new Context(root),"journal");Handler.drain();
+  check(!new File(dir,"session-old.native-enabled").exists(),"recovered marker removed");
   check(read(find(dir,"-interrupted.log")).contains("END interrupted"),"restart recovery");
   j.start("ssid=private");j.start("duplicate");SystemClock.time=200;
   j.record("token=secret 11:22:33:44:55:66");SystemClock.time=900;Handler.drain();
@@ -51,6 +53,20 @@ public class JournalTest {
   check(complete!=null&&read(complete).contains("END done"),"finalized");
   check(read(complete).contains("dropped queued events="),"bounded queue");
   for(File f:dir.listFiles())check(!f.getName().endsWith(".native-enabled"),"completed marker removed");
+  j.beginAttempt("attempt one");j.record("first-only");
+  j.beginAttempt("attempt two");j.record("second-only");
+  j.start("startup continuation");j.end("second finished");Handler.drain();
+  boolean first=false,second=false;
+  for(File f:dir.listFiles())if(f.getName().endsWith(".log")){
+   String content=read(f);
+   if(content.contains("START attempt one")){
+    check(content.contains("first-only")&&!content.contains("second-only")&&content.contains("superseded by session creation callback"),"first attempt isolation");first=true;
+   }
+   if(content.contains("START attempt two")){
+    check(content.contains("second-only")&&!content.contains("first-only")&&!content.contains("startup continuation")&&content.contains("END second finished"),"second attempt isolation");second=true;
+   }
+  }
+  check(first&&second,"both attempts finalized");
   j.start("failure");Handler.drain();
   File blocked=find(dir,".active");check(blocked.delete()&&blocked.mkdir(),"inject unwritable path");
   j.record("cannot write");j.end("failed");Handler.drain();

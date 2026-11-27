@@ -31,11 +31,19 @@ final class SessionJournal {
             if (!dir.isDirectory() && !dir.mkdirs()) return;
             File[] files = dir.listFiles();
             if (files != null) for (File f : files) if (f.getName().endsWith(".active")) {
-                if (append(f, row("END interrupted process/service restart"), true))
-                    f.renameTo(new File(dir, f.getName().replace(".active", "-interrupted.log")));
+                if (append(f, row("END interrupted process/service restart"), true)
+                        && f.renameTo(new File(dir, f.getName().replace(".active", "-interrupted.log")))) {
+                    new File(dir, f.getName().replace(".active", ".native-enabled")).delete();
+                }
             }
             prune();
         }});
+    }
+
+    /** A new creation attempt is a recording boundary, even without finalization. */
+    synchronized void beginAttempt(String detail) {
+        end("superseded by session creation callback");
+        start(detail);
     }
 
     synchronized void start(final String detail) {
@@ -43,6 +51,7 @@ final class SessionJournal {
         accepting = true;
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
         worker.post(new Runnable() { public void run() {
+            active = null;
             if (!dir.isDirectory() && !dir.mkdirs()) return;
             active = new File(dir, "session-" + wall + "-" + UUID.randomUUID().toString() + ".active");
             header = row("START " + bounded(detail), wall, elapsed);
