@@ -12,7 +12,7 @@ final class SessionLogPolicy {
     private static final int MAX_KEYS = 256;
     private static final int MAX_MESSAGE = 2048;
     private static final long WINDOW_MS = 10000;
-    private static final Pattern SECRET = Pattern.compile("(?i)(authorization|cookie|password|passwd|secret|token|psk|session[ _-]?key|pairing[ _-]?(?:id|identifier)|device[ _-]?(?:id|identifier)|serial[ _-]?number|private[ _-]?key|ssid|passphrase|vin|https?://|mac[ _-]?address|bluetooth[ _-]?address)");
+    private static final Pattern SECRET = Pattern.compile("(?i)(authorization|cookie|password|passwd|secret|token|psk|session[ _-]?key|pairing[ _-]?(?:id|identifier)|device[ _-]?(?:id|identifier)|serial[ _-]?number|private[ _-]?key|ssid|passphrase|\\bvin\\b|https?://|mac[ _-]?address|bluetooth[ _-]?address)");
     private final EnumSet<Category> diagnostics;
     private final LinkedHashMap<String, Long> seen = new LinkedHashMap<String, Long>(32, 0.75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
@@ -27,7 +27,7 @@ final class SessionLogPolicy {
 
     static EnumSet<Category> diagnosticCategories(boolean detail,boolean packets) {
         EnumSet<Category> categories=EnumSet.noneOf(Category.class);
-        if(detail)categories.addAll(EnumSet.of(Category.BLUETOOTH,Category.WIFI,Category.IAP2,Category.AUDIO,Category.IDENTITY,Category.TRANSPORT));
+        if(detail)categories.addAll(EnumSet.of(Category.BLUETOOTH,Category.WIFI,Category.IAP2,Category.AUDIO,Category.IDENTITY,Category.TRANSPORT,Category.NOW_PLAYING,Category.NATIVE,Category.LATENCY));
         if(packets)categories.addAll(EnumSet.of(Category.PACKET_METADATA,Category.PROJECTION_METADATA));
         return categories;
     }
