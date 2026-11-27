@@ -106,6 +106,28 @@ public final class SessionExporterTest {
             check(!new File(dest, "session-102.native.log").exists(), "unready native excluded");
             check(!new File(dest, "session-103.native.log").exists(), "active native excluded");
             check(!new File(dest, "session-101.native.log.4").exists(), "unexpected rotation excluded");
+            // Simulate mount removal after the partial file opens, before its first chunk.
+            File interrupted = new File(spool, "session-005.log");
+            put(interrupted, "session during USB removal");
+            File interruptedPart = new File(dest, interrupted.getName()+".part");
+            File interruptedTarget = new File(dest, interrupted.getName());
+            final SessionExporter.MountGuard liveGuard = new SessionExporter.MountGuard(usb, mounts);
+            SessionExporter.Guard removal = new SessionExporter.Guard() {
+                public void check() throws IOException {
+                    if (interruptedPart.exists()) put(mounts, "");
+                    liveGuard.check();
+                }
+            };
+            try {
+                SessionExporter.exportOne(interrupted, dest, removal);
+                throw new AssertionError("mid-copy removal accepted");
+            } catch (IOException expected) {}
+            check(interrupted.isFile() && !interruptedTarget.exists(), "source retained and no publication after removal");
+            check(!new File(dest, interrupted.getName()+".complete").exists(), "no completion marker after removal");
+            check(interruptedPart.exists(), "no cleanup on changed mount");
+            put(mounts, "33 20 8:1 / " + usb.getCanonicalPath() + " rw - vfat /dev/block/sda1 rw\n");
+            SessionExporter.exportOne(interrupted, dest, new SessionExporter.MountGuard(usb, mounts));
+            check(!interruptedPart.exists() && Arrays.equals(SessionExporter.digest(interrupted), SessionExporter.digest(interruptedTarget)), "recovery after mid-copy removal");
             System.out.println("Java session export tests passed");
         } finally { remove(root); }
     }
