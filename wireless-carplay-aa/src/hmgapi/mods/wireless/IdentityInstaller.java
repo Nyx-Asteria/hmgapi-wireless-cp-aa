@@ -156,7 +156,7 @@ final class IdentityInstaller {
             withdrawal.setPending(loaded);
         }
         if(shutdownPending)finishShutdown(mod);
-        if(withdrawal.pending())clearStart(mod);
+        if(withdrawal.pending())clearStart(mod,registry);
     }
 
     private static boolean finishShutdown(ModContext mod){
@@ -171,7 +171,8 @@ final class IdentityInstaller {
         }
     }
 
-    private static boolean clearStart(ModContext mod) {
+    private static boolean clearStart(ModContext mod,IdentityRegistry registry) {
+        registry.clearSessionEvidence(armedGeneration);
         lastStart=null;
         if(!loaded){withdrawal.setPending(false);return true;}
         withdrawal.setPending(true);
@@ -198,13 +199,13 @@ final class IdentityInstaller {
         if(!mod.enabled()){suspend(mod,registry);return;}
         if(suspended)return;
         if (!loaded) return;
-        if(withdrawal.pending() && !clearStart(mod))return;
+        if(withdrawal.pending() && !clearStart(mod,registry))return;
         if(!armed)return;
         IdentityRegistry.Snapshot snapshot=registry.snapshot();
-        if(snapshot.generation!=armedGeneration) { clearStart(mod); return; }
+        if(snapshot.generation!=armedGeneration) { clearStart(mod,registry); return; }
         CarPlayIdentification.ThemeIdentity theme = snapshot.theme;
         if (!mod.enabled() || !mod.settingBoolean("bridge", true) || theme == null || !snapshot.start) {
-            if (lastStart != null && !clearStart(mod)) return;
+            if (lastStart != null && !clearStart(mod,registry)) return;
             notice(mod, "extension not requested");
             return;
         }
@@ -212,15 +213,16 @@ final class IdentityInstaller {
             StartSession.Preparation preparation=StartSession.prepare(app.context, theme);
             byte[] msg=preparation.message;
             if (msg == null) {
-                if (lastStart != null && !clearStart(mod)) return;
+                if (lastStart != null && !clearStart(mod,registry)) return;
                 notice(mod, "preparation blocked=" + preparation.blocker.name() + "; stock startup retained");
                 return;
             }
             if (java.util.Arrays.equals(lastStart, msg)) return;
+            registry.clearSessionEvidence(armedGeneration);
             withdrawal.setPending(true); // failed/throwing native call may leave an older payload
             int result = NativeIdentity.startSession(msg);
             if (result != 0) {
-                if(!clearStart(mod))return;
+                if(!clearStart(mod,registry))return;
                 notice(mod, "native session extension refused (" + result + "); stock startup retained");
                 return;
             }
@@ -228,7 +230,7 @@ final class IdentityInstaller {
             lastStart = msg;
             notice(mod, "armed 0x4300/0x4301 (" + msg.length + " bytes; contents not logged)");
         } catch (Throwable failure) {
-            if(!clearStart(mod))return;
+            if(!clearStart(mod,registry))return;
             notice(mod, "extension unavailable (" + failure.getClass().getSimpleName() + "); stock startup retained");
         }
     }
