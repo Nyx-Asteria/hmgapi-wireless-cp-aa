@@ -25,7 +25,7 @@ final class IdentityInstaller {
             @Override public void run() {
                 try {
                     apply(mod, app, contributions);
-                    if (contributions.vehicle() != null) enableGroups(app.classLoader);
+                    enableGroups(app.classLoader);
                 }
                 catch (Throwable t) { failure(mod, "CarPlay identification contribution change", t); }
             }
@@ -50,15 +50,15 @@ final class IdentityInstaller {
                     // point runs after it and before the identification message is built.
                     if (!armed) apply(mod, app, contributions);
                     else refreshStart(mod, app, contributions);
-                    if (armed && contributions.vehicle() != null) enableGroups(app.classLoader);
+                    enableGroups(app.classLoader);
                 } catch (Throwable t) {
                     failure(mod, "CarPlay identification late initialization", t);
                 }
             }
         };
         mod.hook(app.classLoader, "iap2.init_info.check_supports_features", groups);
-        try { if (armed && registry.vehicle() != null) enableGroups(app.classLoader); }
-        catch (Exception e) { throw new IllegalStateException("CarPlay identification groups", e); }
+        try { enableGroups(app.classLoader); }
+        catch (Exception e) { mod.error("CarPlay stock vehicle groups unavailable; retaining stock behavior", e); }
         mod.log(armed ? "CarPlay identification: contribution serializer installed"
                 : "CarPlay identification: waiting for iAP2 native initialization");
         mod.hook(app.classLoader, "iap2.service.receive_connect", new MethodHook() {
@@ -66,6 +66,7 @@ final class IdentityInstaller {
                 if (p.args.length != 1 || !(p.args[0] instanceof Integer) || ((Integer)p.args[0]) != 4) return;
                 try {
                     if (!armed) apply(mod, app, contributions);
+                    enableGroups(app.classLoader);
                     refreshStart(mod, app, contributions);
                     mod.log("CarPlayStart: Bluetooth pre-connect preparation complete");
                 } catch (Throwable t) { failure(mod, "CarPlayStart Bluetooth pre-connect", t); }
@@ -196,8 +197,19 @@ final class IdentityInstaller {
         else mod.error(message, t);
     }
 
-    private static void enableGroups(ClassLoader cl) throws Exception {
-        Points.field(cl, "iap2.init_info.use_vehicle_information").setInt(null, 1);
-        Points.field(cl, "iap2.init_info.use_vehicle_status").setInt(null, 1);
+    // These are stock capability flags, independent of the custom serializer.
+    // Resolve both fields before changing either; roll back on a failed write.
+    private static synchronized void enableGroups(ClassLoader cl) throws Exception {
+        java.lang.reflect.Field info=Points.field(cl,"iap2.init_info.use_vehicle_information");
+        java.lang.reflect.Field status=Points.field(cl,"iap2.init_info.use_vehicle_status");
+        int oldInfo=info.getInt(null), oldStatus=status.getInt(null);
+        try {
+            info.setInt(null,1);
+            status.setInt(null,1);
+        } catch(Exception failure) {
+            try {info.setInt(null,oldInfo);}catch(Exception ignored){}
+            try {status.setInt(null,oldStatus);}catch(Exception ignored){}
+            throw failure;
+        }
     }
 }
