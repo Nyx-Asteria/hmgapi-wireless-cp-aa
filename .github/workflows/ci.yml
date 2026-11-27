@@ -69,3 +69,9 @@ jobs:
           mkdir -p out/resume-recovery
           javac --release 8 -d out/resume-recovery wireless-carplay-aa/src/hmgapi/mods/wireless/ResumeRecovery.java wireless-carplay-aa/tests/ResumeRecoveryTest.java
           java -cp out/resume-recovery hmgapi.mods.wireless.ResumeRecoveryTest
+
+      - name: Experimental theme archive quarantine regression
+        run: |
+          mkdir -p out/theme-archive
+          javac --release 8 -d out/theme-archive wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/tests/ThemeArchiveCaptureTest.java
+          java -cp out/theme-archive hmgapi.mods.wireless.ThemeArchiveCaptureTest
