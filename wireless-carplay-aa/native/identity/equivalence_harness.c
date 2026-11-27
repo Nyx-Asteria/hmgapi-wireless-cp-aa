@@ -184,12 +184,12 @@ int test_main(void){
        || theme_tuple_ok("A:1:1:2",7))result|=1;
     // Preserve OEM capability IDs; append only while a response is armed.
     unsigned char capabilities[8]={0};
-    start_len=6;
-    if(start_append(fixture_blob,0,0,0,0,0,1)!=6)result|=1;
+    start_len=6;start_capability_seen=0;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=6 || start_capability_seen)result|=1;
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=4
-       || capabilities[0]!=0x1d || capabilities[1]!=1 || capabilities[2]!=0x43 || capabilities[3]!=1)result|=1;
+       || capabilities[0]!=0x1d || capabilities[1]!=1 || capabilities[2]!=0x43 || capabilities[3]!=1 || start_capability_seen!=1)result|=1;
     if(start_append(fixture_blob,capabilities,8,0,0,0,0)!=6
-       || capabilities[4]!=0x43 || capabilities[5]!=0)result|=1;
+       || capabilities[4]!=0x43 || capabilities[5]!=0 || start_capability_seen!=3)result|=1;
     if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)result|=1;
     fixture_blob_size=3;
     if(start_append(fixture_blob,0,0,0,0,0,1)!=3
@@ -198,7 +198,10 @@ int test_main(void){
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=-1)result|=1;
     fixture_blob_size=2147483647;
     if(start_append(fixture_blob,0,0,0,0,0,1)!=2147483647)result|=1;
-    fixture_blob_size=4;start_clear_locked();
+    fixture_blob_size=4;__atomic_store_n(&start_capability_built,3,__ATOMIC_RELEASE);
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=3)result|=1;
+    start_clear_locked();
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=0)result|=1;
     if(start_append(fixture_blob,0,0,0,0,0,0)!=4
        || start_append(fixture_blob,capabilities,8,0,0,0,0)!=4)result|=1;
     /* Framing of top-level and nested codec parameters. */

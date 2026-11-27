@@ -108,7 +108,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
         return raw_builder(handle,session,a,b,command,table,count,name,lookup);
     if(lock_mutex(&identity_mutex))return 0;
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){unlock_mutex(&identity_mutex);return raw_builder(handle,session,a,b,command,table,count,name,lookup);}
-    identity_seen=0;theme_children_active=0;
+    identity_seen=0;theme_children_active=0;start_capability_seen=0;
     stock_children=0;stock_wireless_lookup=0;build_lookup=lookup;
     Param root[24];for(u32 i=0;i<24;i++){
         root[i]=root_table[i];
@@ -120,6 +120,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
         }
     }
     u32 result=raw_builder(handle,session,a,b,command,root,24,name,identity_value);
+    __atomic_store_n(&start_capability_built,result && start_len?start_capability_seen:0,__ATOMIC_RELEASE);
     /* A selected child table alone is not evidence of serialized identity. */
     u32 required=(has_vehicle?5:0)|(has_theme?2:0);
     if(result)__atomic_store_n(&identity_evidence,identity_seen,__ATOMIC_RELEASE);
@@ -271,6 +272,7 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStat
     if(which==6)return (int)__atomic_load_n(&start_lock_failed,__ATOMIC_ACQUIRE);
     if(which==7)return (int)__atomic_load_n(&start_dispatched,__ATOMIC_ACQUIRE);
     if(which==8)return (int)__atomic_load_n(&start_refused,__ATOMIC_ACQUIRE);
+    if(which==9)return __atomic_load_n(&configured,__ATOMIC_ACQUIRE)?(int)__atomic_load_n(&start_capability_built,__ATOMIC_ACQUIRE):0;
     return -1;
 }
 void __aeabi_memclr(void *dest,u32 n){volatile unsigned char *p=dest;while(n--)*p++=0;}

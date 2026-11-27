@@ -13,6 +13,7 @@ static u32 start_len,start_offers,start_sends,start_generation;
 static int start_last;
 static u32 start_no_payload,start_alloc_failed,start_stale,start_lock_failed;
 static u32 start_dispatched,start_refused;
+static u32 start_capability_seen,start_capability_built;
 static Blob stock_sent_blob,stock_received_blob;
 static void *(*packet_create)(u32,u32);
 static void (*packet_destroy)(void *);
@@ -23,6 +24,7 @@ _Static_assert(sizeof(StartHandler)==24,"control dispatch ABI");
 
 static void start_clear_locked(void){
     start_len=0;
+    __atomic_store_n(&start_capability_built,0,__ATOMIC_RELEASE);
     ++start_generation;
     for(u32 i=0;i<START_MAX;i++)start_msg[i]=0;
 }
@@ -96,9 +98,12 @@ static int start_append(Blob stock,unsigned char *buf,int cap,u32 id,u32 x,u32 y
     if(!buf)return n+2;
     if(cap<n)return n;
     for(int i=0;i<n;i+=2)
-        if(buf[i]==0x43 && buf[i+1]==last)return n;
+        if(buf[i]==0x43 && buf[i+1]==last){
+            start_capability_seen|=last==1?1U:2U;return n;
+        }
     if(cap-n<2)return n;
-    buf[n]=0x43;buf[n+1]=last;return n+2;
+    buf[n]=0x43;buf[n+1]=last;
+    start_capability_seen|=last==1?1U:2U;return n+2;
 }
 static int start_sent_blob(unsigned char *buf,int cap,u32 id,u32 x,u32 y){
     return start_append(stock_sent_blob,buf,cap,id,x,y,1);

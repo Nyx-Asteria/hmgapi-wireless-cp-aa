@@ -239,7 +239,7 @@ final class IdentityInstaller {
         Thread t = new Thread(new Runnable() {
             @Override public void run() {
                 int offers = 0, sends = 0, noPayload = 0, allocation = 0, stale = 0, lock = 0, dispatched = 0, refused = 0;
-                int evidence=-1;long evidenceGeneration=-1;
+                int evidence=-1, capabilityEvidence=-1;long evidenceGeneration=-1;
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
                         synchronized(IdentityInstaller.class){
@@ -273,6 +273,12 @@ final class IdentityInstaller {
                                             +" vehicle values built="+((currentEvidence&5)==5)
                                             +" theme value built="+((currentEvidence&2)!=0));
                                     evidence=currentEvidence;evidenceGeneration=armedGeneration;
+                                }
+                                int capability=NativeIdentity.startSessionStatus(9);
+                                if(capability!=capabilityEvidence){
+                                    mod.log("CarPlayStart: capability builder evidence sent="+((capability&1)!=0)
+                                            +" received="+((capability&2)!=0)+"; delivery unconfirmed");
+                                    capabilityEvidence=capability;
                                 }
                                 int o = NativeIdentity.startSessionStatus(0), n = NativeIdentity.startSessionStatus(1);
                                 int p=NativeIdentity.startSessionStatus(3), a=NativeIdentity.startSessionStatus(4);
