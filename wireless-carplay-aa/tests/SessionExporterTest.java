@@ -187,6 +187,36 @@ public final class SessionExporterTest {
                 SessionExporter.exportOne(fallback, dest);
                 check(new File(dest, fallback.getName()+".complete").isFile() && fallback.isFile(), "unsupported directory sync preserves verified export and source");
             } finally { SessionExporter.directorySync = original; }
+
+            File bundles=new File(root,"bundles");check(bundles.mkdir(),"bundle spool");
+            String id="2026-11-27_13-00-00_session-7_12345678-1234-1234-1234-123456789abc";
+            File bundle=new File(bundles,id);check(bundle.mkdir(),"bundle");
+            put(new File(bundle,"summary.txt"),"end");
+            put(new File(bundle,"session.log"),"data");
+            put(new File(bundle,"errors.log"),"");
+            File diag=new File(bundle,"diagnostics");check(diag.mkdir(),"diagnostics");put(new File(diag,"core.log"),"metadata");
+            put(new File(bundle,"secret.bin"),"excluded");
+            File open=new File(bundles,id+".open");check(open.mkdir(),"open session");
+            File bundleDest=new File(logs,id);
+            put(mounts,"41 20 8:1 / "+usb.getCanonicalPath()+" rw - vfat /dev/block/sda1 rw\n");
+            SessionExporter.MountGuard bundleGuard=new SessionExporter.MountGuard(usb,mounts);
+            SessionExporter.exportBundles(bundles,logs,bundleGuard);
+            check(new File(bundleDest,"COMPLETE.txt").isFile(),"bundle complete");
+            check(new File(bundleDest,"diagnostics/core.log").isFile(),"category exported");
+            check(!new File(bundleDest,"secret.bin").exists(),"unapproved file excluded");
+            check(!new File(logs,open.getName()).exists(),"open excluded");
+            check(new File(bundle,".exported").delete(),"simulate local marker loss");
+            SessionExporter.exportBundles(bundles,logs,bundleGuard);
+            check(new File(bundle,".exported").delete(),"marker recovered");
+            put(new File(bundleDest,"session.log"),"corrupt");
+            try{SessionExporter.exportBundles(bundles,logs,bundleGuard);throw new AssertionError("corrupt bundle accepted");}catch(IOException expected){}
+            check(!new File(bundle,".exported").exists(),"conflict not marked");
+            put(new File(bundleDest,"session.log"),"data");
+            put(mounts,"42 20 8:1 / "+usb.getCanonicalPath()+" rw - vfat /dev/block/sda1 rw\n");
+            try{SessionExporter.exportBundles(bundles,logs,bundleGuard);throw new AssertionError("remount accepted");}catch(IOException expected){}
+            check(!new File(bundle,".exported").exists(),"remount not marked");
+            SessionExporter.exportBundles(bundles,logs,new SessionExporter.MountGuard(usb,mounts));
+            check(new File(bundle,".exported").isFile(),"retry verified");
             System.out.println("Java session export tests passed");
         } finally { remove(root); }
     } finally { for(java.security.Provider provider:providers) java.security.Security.addProvider(provider); }
