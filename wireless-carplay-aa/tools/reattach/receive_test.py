@@ -27,11 +27,12 @@ public class ReceiveTest {
     static final ArrayList<byte[]> sPendingIn = new ArrayList<>();
     static long diagnosticRxOverflow;
     static boolean rxDraining;
+    static long rxGeneration;
     static void startCpClient(String why) { sCpClient=true; sCpConnected=false; }
     static int errors;
     static void error(String why, Throwable t) { errors++; }
 """ + "\n".join(method(s) for s in (
-    "static void onCpIapIn(", "static void onCpClientConnected(", "private static void flushPending("
+    "static void onCpIapIn(", "static void onCpClientConnected(", "private static void flushPending(", "private static void resetReceive("
 )) + """
     static void check(boolean v,String msg) { if(!v) throw new AssertionError(msg); }
     static void send(int n) { onCpIapIn(null,new byte[]{(byte)n},1); }
@@ -63,6 +64,20 @@ public class ReceiveTest {
         seen.clear();sIap2=(b,n)->{if(b[0]==7)throw new IllegalStateException("fixture");seen.add((int)b[0]);};
         send(7);send(8);check(errors==1&&seen.equals(Arrays.asList(8)),"failure releases drain ownership");
         sUsb=true;send(9);check(seen.equals(Arrays.asList(8)),"USB excludes wireless receive");
+        sUsb=false;seen.clear();
+        CountDownLatch oldEntered=new CountDownLatch(1), oldRelease=new CountDownLatch(1);
+        CountDownLatch newEntered=new CountDownLatch(1), newRelease=new CountDownLatch(1);
+        sIap2=(b,n)->{seen.add((int)b[0]);oldEntered.countDown();await(oldRelease);};
+        Thread oldDrain=new Thread(()->send(10));oldDrain.setDaemon(true);oldDrain.start();await(oldEntered);
+        send(11);resetReceive();
+        sIap2=(b,n)->{seen.add((int)b[0]);if(b[0]==12){newEntered.countDown();await(newRelease);}};
+        send(12);
+        Thread newDrain=new Thread(()->onCpClientConnected());newDrain.setDaemon(true);newDrain.start();await(newEntered);
+        send(13);oldRelease.countDown();oldDrain.join(3000);
+        check(!oldDrain.isAlive()&&seen.equals(Arrays.asList(10,12)),"old drain must not consume new queue");
+        send(14);check(seen.equals(Arrays.asList(10,12)),"old drain must not release new ownership");
+        newRelease.countDown();newDrain.join(3000);
+        check(!newDrain.isAlive()&&seen.equals(Arrays.asList(10,12,13,14)),"new generation FIFO and old queue discarded");
         System.out.println("Bridge receive FIFO, copy, overflow, concurrent enqueue, failure and USB checks passed");
     }
 }
