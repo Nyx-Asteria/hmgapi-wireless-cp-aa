@@ -238,7 +238,7 @@ final class IdentityInstaller {
         watcherStarted = true;
         Thread t = new Thread(new Runnable() {
             @Override public void run() {
-                int offers = 0, sends = 0, noPayload = 0, allocation = 0, stale = 0, lock = 0;
+                int offers = 0, sends = 0, noPayload = 0, allocation = 0, stale = 0, lock = 0, dispatched = 0, refused = 0;
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
                         synchronized(IdentityInstaller.class){
@@ -269,12 +269,14 @@ final class IdentityInstaller {
                                 int o = NativeIdentity.startSessionStatus(0), n = NativeIdentity.startSessionStatus(1);
                                 int p=NativeIdentity.startSessionStatus(3), a=NativeIdentity.startSessionStatus(4);
                                 int s=NativeIdentity.startSessionStatus(5), l=NativeIdentity.startSessionStatus(6);
-                                if (o != offers || n != sends || p != noPayload || a != allocation || s != stale || l != lock) {
+                                int ok=NativeIdentity.startSessionStatus(7), rejected=NativeIdentity.startSessionStatus(8);
+                                if (o != offers || n != sends || p != noPayload || a != allocation || s != stale || l != lock || ok != dispatched || rejected != refused) {
                                     mod.log("CarPlayStart: availability offers=" + o + " answers attempted=" + n
+                                            + " OEM dispatch accepted=" + ok + " OEM dispatch refused=" + rejected
                                             + " no payload=" + p + " allocation failures=" + a
                                             + " stale drops=" + s + " lock failures=" + l
                                             + " last result=" + NativeIdentity.startSessionStatus(2));
-                                    offers=o; sends=n; noPayload=p; allocation=a; stale=s; lock=l;
+                                    offers=o; sends=n; noPayload=p; allocation=a; stale=s; lock=l; dispatched=ok; refused=rejected;
                                 }
                             }
                         }

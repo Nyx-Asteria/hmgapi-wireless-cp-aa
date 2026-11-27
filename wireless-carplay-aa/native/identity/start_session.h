@@ -12,6 +12,7 @@ static unsigned char start_msg[START_MAX];
 static u32 start_len,start_offers,start_sends,start_generation;
 static int start_last;
 static u32 start_no_payload,start_alloc_failed,start_stale,start_lock_failed;
+static u32 start_dispatched,start_refused;
 static Blob stock_sent_blob,stock_received_blob;
 static void *(*packet_create)(u32,u32);
 static void (*packet_destroy)(void *);
@@ -79,7 +80,8 @@ static u32 start_notify(u32 link,u32 session,const unsigned char *params,u32 n){
     int rc=send_packet(packet);
     // Verified K5 fc7cb675: zero means the packet was never handed to
     // the OEM send callback. Nonzero means ownership may have transferred.
-    if(rc==0)packet_destroy(packet);
+    if(rc==0){packet_destroy(packet);__atomic_add_fetch(&start_refused,1,__ATOMIC_RELEASE);}
+    else __atomic_add_fetch(&start_dispatched,1,__ATOMIC_RELEASE);
     __atomic_store_n(&start_last,rc,__ATOMIC_RELEASE);
     __atomic_add_fetch(&start_sends,1,__ATOMIC_RELEASE);
     return 0;

@@ -258,6 +258,8 @@ int test_main(void){
     start_notify(1,2,0,0);
     if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=2
        || start_sends!=before+2 || start_last!=1)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,7)!=1
+       || Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,8)!=1)result|=1;
     // Shutdown must report native failures and be safe to retry.
     lock_mutex=mutex_fail;
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-15 || configured || identity_built)result|=1;
