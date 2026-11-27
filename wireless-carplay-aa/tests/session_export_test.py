@@ -81,3 +81,31 @@ for modern in (False, True):
         assert not list(dest.glob("*.part"))
         assert (src / "session-001.log").exists()
         print("Native capture passed: modern=" + str(modern))
+
+# Exercise the actual retention function without starting a collector.
+with tempfile.TemporaryDirectory() as tmp:
+    d = Path(tmp)
+    native = d / "native"
+    src = d / "journal"
+    native.mkdir()
+    src.mkdir()
+    script = (root / "export-sessions.sh").read_text()
+    body = script[script.index("prune_native() {"):script.index("# Prefer a short historical tail")]
+    for i in range(12):
+        base = f"session-{i:03}"
+        (native / (base + ".native.log")).write_text("preserve")
+        (native / (base + ".native-ready")).write_text("ready")
+    def prune():
+        return subprocess.run(["sh","-c",body + "\nprune_native 11"],env={**os.environ,"native_dir":str(native),"source_dir":str(src),"native_session":""}).returncode
+    assert prune() != 0
+    assert len(list(native.glob("*.native.log"))) == 12
+    (native / "session-000.native-exported").write_text("verif")
+    assert prune() != 0
+    (native / "session-001.native-exported").write_text("verified\n")
+    (src / "session-001.active").write_text("active")
+    assert prune() != 0
+    (src / "session-001.active").unlink()
+    assert prune() == 0
+    assert not (native / "session-001.native.log").exists()
+    assert (native / "session-000.native.log").exists()
+    print("Native retention preserves unexported groups")

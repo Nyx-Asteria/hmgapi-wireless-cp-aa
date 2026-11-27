@@ -174,23 +174,52 @@ public final class SessionExporter {
         if (files == null) throw new IOException("cannot list native journals");
         Arrays.sort(files);
         Exception failure = null;
-        for (File src : files) {
-            String name = src.getName();
-            if (!name.matches("session-[a-zA-Z0-9-]+\\.native\\.log(\\.[123])?")) continue;
-            String base = name.substring(0, name.indexOf(".native.log"));
+        for (File entry : files) {
+            String name = entry.getName();
+            if (!name.matches("session-[a-zA-Z0-9-]+\\.native-ready")) continue;
+            String base=name.substring(0,name.length()-13);
             try {
-                File ready = child(source, base + ".native-ready");
-                if (!ready.isFile() || new File(journals, base + ".active").exists()) continue;
-                if (!src.isFile() || !child(source, name).equals(src.getCanonicalFile())) continue;
+                File ready=child(source,name);
+                if(!ready.isFile()||new File(journals,base+".active").exists())continue;
+                File marker=child(source,base+".native-exported");
+                if(marker.isFile()&&"verified\n".equals(bundleMarker(marker)))continue;
+                File[] segments=new File[4];
+                byte[][] hashes=new byte[4][];
+                boolean any=false;
+                for(int i=0;i<4;i++){
+                    File segment=child(source,base+".native.log"+(i==0?"":"."+i));
+                    if(segment.exists()){
+                        if(!segment.isFile())throw new IOException("invalid native segment");
+                        segments[i]=segment;hashes[i]=digest(segment);any=true;
+                    }
+                }
+                if(!any)continue;
+                guard.check();directory(root);
+                File dest=child(root,"sessions");guard.check();directory(dest);
+                for(File segment:segments)if(segment!=null)exportOne(segment,dest,guard);
+                for(int i=0;i<4;i++){
+                    File segment=child(source,base+".native.log"+(i==0?"":"."+i));
+                    if(segments[i]==null){
+                        if(segment.exists())throw new IOException("native segment appeared during export");
+                    }else if(!Arrays.equals(hashes[i],digest(segment))||
+                            !Arrays.equals(hashes[i],digest(child(dest,segment.getName()))))
+                        throw new IOException("native segment changed during export");
+                }
+                if(!ready.isFile()||new File(journals,base+".active").exists())
+                    throw new IOException("native session no longer finalized");
                 guard.check();
-                directory(root);
-                File dest = child(root, "sessions");
+                File pending=child(source,base+".native-exported.part");
+                if(pending.exists()&&!pending.delete())throw new IOException("cannot clear native marker partial");
+                try(FileOutputStream out=new FileOutputStream(pending)){
+                    out.write("verified\n".getBytes("UTF-8"));out.getFD().sync();
+                }
                 guard.check();
-                directory(dest);
-                exportOne(src, dest, guard);
-            } catch (Exception e) { if (failure == null) failure = e; }
+                if(marker.exists()&&!marker.delete())throw new IOException("cannot replace native marker");
+                if(!pending.renameTo(marker))throw new IOException("cannot publish native marker");
+                // Collector can reclaim immediately after rename. Do not access group again.
+            }catch(Exception e){if(failure==null)failure=e;}
         }
-        if (failure != null) throw failure;
+        if(failure!=null)throw failure;
     }
 
     static void exportOne(File source, File dest) throws Exception {
