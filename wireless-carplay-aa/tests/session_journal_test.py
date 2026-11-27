@@ -87,6 +87,7 @@ public class JournalTest {
   File blocked=find(dir,".active");check(blocked.delete()&&blocked.mkdir(),"inject unwritable path");
   j.record("cannot write");j.end("failed");Handler.drain();
   check(blocked.isDirectory(),"failed sync must not publish completed file");
+  check(!new File(dir,blocked.getName().replace(".active",".native-enabled")).exists(),"failed finalization stops native capture");
   check(blocked.delete(),"cleanup");
   File orphan=new File(dir,"session-orphan.active");
   File orphanMarker=new File(dir,"session-orphan.native-enabled");
@@ -96,6 +97,24 @@ public class JournalTest {
   check(!orphan.exists()&&new File(dir,"session-orphan-interrupted.log").isFile(),"retry orphan recovery without restart");
   check(!orphanMarker.exists(),"orphan native marker removed after finalization");
   j.end("done");Handler.drain();
+  File failDir=new File(root,"retention");check(failDir.mkdir(),"retention fixture");
+  for(int k=0;k<15;k++){
+   String name=String.format("session-%03d",k);
+   File src=new File(failDir,name+".active");
+   Files.write(src.toPath(),"retained".getBytes("UTF-8"));
+   check(new File(failDir,name+"-interrupted.log").mkdir(),"block rename");
+   Files.write(new File(failDir,name+".native-enabled").toPath(),"enabled".getBytes("UTF-8"));
+  }
+  SessionJournal retained=new SessionJournal(new Context(root),"retention");Handler.drain();
+  int count=0;
+  for(File f:failDir.listFiles())if(f.isFile()&&f.getName().endsWith(".active"))count++;
+  check(count==12,"orphan retention capped");
+  check(!new File(failDir,"session-000.active").exists()&&new File(failDir,"session-014.active").isFile(),"oldest orphan pruned first");
+  for(File f:failDir.listFiles())check(!f.getName().endsWith(".native-enabled"),"orphan native marker retired even when rename blocked");
+  retained.start("live after failure");Handler.drain();
+  count=0;for(File f:failDir.listFiles())if(f.isFile()&&f.getName().endsWith(".active"))count++;
+  check(count==13,"live session has independent slot");
+  retained.end("done");Handler.drain();
   System.out.println("Session journal recovery, redaction, timestamps, queue and write failure passed");
  }
 }""",

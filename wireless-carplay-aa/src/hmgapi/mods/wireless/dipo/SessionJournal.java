@@ -55,7 +55,7 @@ final class SessionJournal {
             active = new File(dir, "session-" + wall + "-" + UUID.randomUUID().toString() + ".active");
             header = row("START " + bounded(detail), wall, elapsed);
             writeFailed = !append(active, header, true);
-            if (CarPlayLog.on) {
+            if (!writeFailed && CarPlayLog.on) {
                 File marker = new File(dir, active.getName().replace(".active", ".native-enabled"));
                 append(marker, "enabled\n".replace("\n", ""), false);
             }
@@ -86,6 +86,8 @@ final class SessionJournal {
         final String raw = bounded("END " + reason);
         worker.post(new Runnable() { public void run() {
             if (active == null) return;
+            // Stop native capture even when journal finalization fails.
+            new File(dir, active.getName().replace(".active", ".native-enabled")).delete();
             int lost = sessionDropped.getAndSet(0);
             if (lost != 0) write(row("LOGGER dropped queued events=" + lost));
             write(row(raw, wall, elapsed));
@@ -93,6 +95,7 @@ final class SessionJournal {
             if (!append(active, "", true)) writeFailed = true;
             if (writeFailed && !append(active, row("LOGGER incomplete recording: disk write failed"), true)) {
                 active = null;
+                prune();
                 return;
             }
             File completed = new File(dir, active.getName().replace(".active", writeFailed ? "-interrupted.log" : ".log"));
@@ -147,14 +150,36 @@ final class SessionJournal {
         for (File f : files) {
             if (!f.isFile() || !f.getName().endsWith(".active")) continue;
             File target = new File(dir, f.getName().replace(".active", "-interrupted.log"));
-            if (!target.exists() && append(f, row("END interrupted process/service restart or failed finalization"), true)
+            new File(dir, f.getName().replace(".active", ".native-enabled")).delete();
+            // Bound recovery growth even when the final rename repeatedly fails.
+            if (!target.exists() && append(f, f.length() < LIMIT ? row("END interrupted process/service restart or failed finalization") : "", true)
                     && f.renameTo(target)) {
                 new File(dir, f.getName().replace(".active", ".native-enabled")).delete();
             }
         }
     }
 
+    /** Keep failed recordings separate from the completed retention budget. */
+    private void pruneOrphans() {
+        File[] files = dir.listFiles(new FilenameFilter() {
+            public boolean accept(File d, String n) {
+                return n.startsWith("session-") && n.endsWith(".active") && new File(d, n).isFile();
+            }
+        });
+        if (files == null || files.length <= KEEP) return;
+        Arrays.sort(files, new Comparator<File>() {
+            public int compare(File a, File b) { return a.getName().compareTo(b.getName()); }
+        });
+        for (int i = 0; i < files.length - KEEP; i++) {
+            File f = files[i];
+            if (f.equals(active)) continue;
+            new File(dir, f.getName().replace(".active", ".native-enabled")).delete();
+            f.delete();
+        }
+    }
+
     private void prune() {
+        pruneOrphans();
         File[] files = dir.listFiles(new FilenameFilter() {
             public boolean accept(File d, String n) { return n.endsWith(".log"); }
         });

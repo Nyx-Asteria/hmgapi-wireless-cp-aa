@@ -32,6 +32,8 @@ for modern in (False, True):
             + 'if [ "$1" = -h ]; then echo "' + helptext + '"; exit 0; fi\n'
             + 'echo "$*" > "' + str(d / "args") + '"\n'
             + 'while [ "$#" -gt 0 ]; do if [ "$1" = -f ]; then shift; printf "native\\n" > "$1"; break; fi; shift; done\n'
+            + 'echo started >> "' + str(d / "starts") + '"\n'
+            + 'if [ ! -e "' + str(d / "failed-once") + '" ]; then touch "' + str(d / "failed-once") + '"; exit 1; fi\n'
             + 'while true; do /bin/sleep 1; done\n')
         logcat.chmod(0o755)
         sleep = binpath / "sleep"
@@ -41,8 +43,8 @@ for modern in (False, True):
             + '/bin/sleep 0.1\n'
             + 'case "$n" in\n'
             + '1) [ ! -e "' + str(dest) + '" ] || exit 99; echo "dev ' + str(usb) + ' vfat rw 0 0" > "' + str(mounts) + '";;\n'
-            + '2) [ ! -e "' + str(native / "session-001.native-ready") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
-            + '4) kill -TERM "$PPID";;\nesac\n')
+            + '4) [ ! -e "' + str(native / "session-001.native-ready") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
+            + '6) kill -TERM "$PPID";;\nesac\n')
         sleep.chmod(0o755)
         script = (root / "export-sessions.sh").read_text()
         script = script.replace("/data/data/com.daudio.app.dipo/files/wcp-carplay-sessions", str(src))
@@ -51,6 +53,7 @@ for modern in (False, True):
         script = script.replace("/proc/mounts", str(mounts))
         subprocess.run(["sh", "-c", script], env={**os.environ, "PATH":str(binpath)+":"+os.environ["PATH"]},
                        check=True, timeout=15)
+        assert (d / "starts").read_text().splitlines() == ["started", "started"], "dead collector must restart exactly once" 
         assert ("-T 200" in (d / "args").read_text()) == modern
         assert not (d / "premature").exists()
         assert (native / "session-001.native.log").read_text() == "native\n"
