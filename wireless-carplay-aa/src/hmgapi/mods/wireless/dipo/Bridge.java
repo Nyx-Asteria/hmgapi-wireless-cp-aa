@@ -88,6 +88,7 @@ final class Bridge {
     private static final ArrayList<byte[]> sPendingIn = new ArrayList<byte[]>();
     // Process-lifetime count; guarded by sPendingIn.
     private static long diagnosticRxOverflow;
+    private static long diagnosticRxAttempts, diagnosticRxFailures, diagnosticRxTotalMs, diagnosticRxMaxMs;
     private static BtListener sBt;
     private static TxListener sTx;
     /** CarPlay-channel sends: one sender thread + queue per link (a re-attach abandons the dead link's) */
@@ -131,7 +132,7 @@ final class Bridge {
     static void onIap2Bound(IIap2Service s) {
         if (s == null) return;
         try {
-            sIap2 = s;
+            replaceReceiveService(s);
             synchronized (Bridge.class) {
                 if (sTx == null) sTx = new TxListener();
             }
@@ -139,6 +140,7 @@ final class Bridge {
             info.onSetSupportType(LISTENER_EXTERNAL_BT_TRANSPORT | LISTENER_EXTERNAL_CARPLAY_TRANSPORT);
             info.onSetListenerName("EV6_CPWL_BT");
             log("Iap2SvcInit(EV6_CPWL_BT, 0xc00) = " + s.Iap2SvcInit(sTx, info));
+            flushPending();
         } catch (Throwable t) {
             error("onIap2Bound", t);
         }
@@ -296,40 +298,59 @@ final class Bridge {
     /** iAP2 bytes from the phone over the CarPlay channel: to the iAP2 server (buffered until its session is up) */
     static void onCpIapIn(Object cp, byte[] data, int len) {
         try {
-            if (cp != null) sCp = cp;
-            if (data == null || data.length == 0 || len <= 0 || sUsb) return;
+            if (data == null || data.length == 0 || len <= 0) return;
+            final long generation;
+            synchronized (sPendingIn) {
+                if (sUsb) return;
+                generation = rxGeneration;
+            }
             if (len >= data.length) len = data.length;
             byte[] b = new byte[len];
             System.arraycopy(data, 0, b, 0, len);
-            if (!sCpClient) startCpClient("iAP2 data from CarPlay channel");
-            synchronized (sPendingIn) {
-                if (!sCpClient || sUsb) return;
-                if (sPendingIn.size() >= MAX_PENDING) {
-                    diagnosticRxOverflow++;
-                    return;
-                }
-                sPendingIn.add(b);
-            }
-            flushPending();
+            acceptReceive(cp, b, generation);
         } catch (Throwable t) {
             error("onCpIapIn", t);
         }
+    }
+
+    // Generation is sampled before copying, then revalidated at admission.
+    private static void acceptReceive(Object cp, byte[] packet, long generation) {
+        synchronized (sPendingIn) {
+            if (generation != rxGeneration || sUsb) return;
+        }
+        if (!sCpClient) startCpClient("iAP2 data from CarPlay channel", generation);
+        synchronized (sPendingIn) {
+            if (generation != rxGeneration || !sCpClient || sUsb) return;
+            if (cp != null) sCp = cp;
+            if (sPendingIn.size() >= MAX_PENDING) {
+                diagnosticRxOverflow++;
+                return;
+            }
+            sPendingIn.add(packet);
+        }
+        flushPending();
     }
 
     static void onCpSessionFinalized(int type) {
         attachGeneration.advance();
         try {
             int pendingCount;
-            long rxOverflow;
+            long rxOverflow, rxAttempts, rxFailures, rxTotalMs, rxMaxMs;
             synchronized (sPendingIn) {
                 pendingCount = sPendingIn.size();
                 rxOverflow = diagnosticRxOverflow;
+                rxAttempts = diagnosticRxAttempts;
+                rxFailures = diagnosticRxFailures;
+                rxTotalMs = diagnosticRxTotalMs;
+                rxMaxMs = diagnosticRxMaxMs;
             }
             long elapsed = diagnosticStartedAt == 0 ? -1 : now() - diagnosticStartedAt;
             log("CarPlay teardown snapshot type=" + type + " durationMs=" + elapsed
                     + " wireless=" + sCpWireless + " client=" + sCpClient
                     + " connected=" + sCpConnected + " rxPending=" + pendingCount
                     + " rxOverflowTotal=" + rxOverflow
+                     + " rxAttemptsTotal=" + rxAttempts + " rxFailuresTotal=" + rxFailures
+                     + " rxBinderTotalMs=" + rxTotalMs + " rxBinderMaxMs=" + rxMaxMs
                     + " " + sCpTx.diagnosticSnapshot());
             diagnosticStartedAt = 0;
             diagnosticCreatedAt = 0;
@@ -370,14 +391,22 @@ final class Bridge {
     }
 
     static void startCpClient(final String why) {
-        synchronized (Bridge.class) {
-            if (sCpClient || sUsb) return;
+        final long receiveGeneration;
+        synchronized (sPendingIn) { receiveGeneration = rxGeneration; }
+        startCpClient(why, receiveGeneration);
+    }
+
+    private static void startCpClient(final String why, long receiveGeneration) {
+        final String addr;
+        final int generation;
+        synchronized (sPendingIn) {
+            if (receiveGeneration != rxGeneration || sCpClient || sUsb) return;
             sCpClient = true;
             sCpConnected = false;
+            addr = sAddr;
+            sCpSerial = addr;
+            generation = attachGeneration.advance();
         }
-        final String addr = sAddr;
-        sCpSerial = addr;
-        final int generation = attachGeneration.advance();
         if (reattachEnabled()) sReattach.sessionUp();
         Dipo.rgSessionUp();
         txWatch();
@@ -403,14 +432,28 @@ final class Bridge {
         });
     }
 
-    static void onCpClientConnected() {
-        sCpConnected = true;
+    static boolean onCpClientConnected(long generation) {
+        synchronized (sPendingIn) {
+            if (generation != rxGeneration || !sCpClient || sUsb) return false;
+            sCpConnected = true;
+        }
         flushPending();
+        synchronized (sPendingIn) {
+            return generation == rxGeneration && sCpClient && !sUsb && sCpConnected;
+        }
     }
 
     // Exactly one drain owner; callbacks can enqueue during Binder delivery.
     private static boolean rxDraining;
     private static long rxGeneration;
+
+    // A new service must establish its own link before consuming wireless packets.
+    private static void replaceReceiveService(IIap2Service service) {
+        synchronized (sPendingIn) {
+            if (sIap2 != null && sIap2 != service) resetReceive();
+            sIap2 = service;
+        }
+    }
 
     private static void resetReceive() {
         synchronized (sPendingIn) {
@@ -440,10 +483,21 @@ final class Bridge {
                 }
                 packet = sPendingIn.remove(0);
             }
+            long began = now();
+            boolean failed = false;
             try {
                 service.Iap2SvcTransportReadDone(packet, packet.length);
             } catch (Throwable t) {
+                failed = true;
                 error("ordered receive delivery", t);
+            } finally {
+                long elapsed = Math.max(0, now() - began);
+                synchronized (sPendingIn) {
+                    diagnosticRxAttempts++;
+                    if (failed) diagnosticRxFailures++;
+                    diagnosticRxTotalMs += elapsed;
+                    diagnosticRxMaxMs = Math.max(diagnosticRxMaxMs, elapsed);
+                }
             }
         }
     }
@@ -793,11 +847,12 @@ final class Bridge {
                 }
             }
             else if (component == COMPONENT_CARPLAY_CLIENT) {
-                if (!sCpClient || sUsb) {
+                final long generation;
+                synchronized (sPendingIn) { generation = rxGeneration; }
+                if (!onCpClientConnected(generation)) {
                     log("Ignoring CarPlay-channel connected callback outside active wireless handover");
                     return;
                 }
-                onCpClientConnected();
                 sReattach.connected();
             }
         }
