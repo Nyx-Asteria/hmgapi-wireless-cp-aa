@@ -275,6 +275,9 @@ final class IdentityInstaller {
                                     evidence=currentEvidence;evidenceGeneration=armedGeneration;
                                 }
                                 int capability=NativeIdentity.startSessionStatus(9);
+                                if(armed && !shutdownPending)
+                                    registry.reportNegotiation(armedGeneration,currentEvidence,capability,
+                                            lastStart!=null && !withdrawal.pending());
                                 if(capability!=capabilityEvidence){
                                     mod.log("CarPlayStart: capability builder evidence sent="+((capability&1)!=0)
                                             +" received="+((capability&2)!=0)+"; delivery unconfirmed");

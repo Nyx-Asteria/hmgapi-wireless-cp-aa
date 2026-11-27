@@ -17,7 +17,19 @@ final class IdentityRegistry implements CarPlayIdentification {
     private boolean suspended;
     private IdentityStatus status=new IdentityStatus(0,Readiness.UNAVAILABLE,"no contributions");
 
+    private NegotiationStatus negotiation=new NegotiationStatus(0,false,false,false,false,false,false);
     @Override public synchronized IdentityStatus identityStatus() { return status; }
+    @Override public synchronized NegotiationStatus negotiationStatus() { return negotiation; }
+
+    synchronized boolean reportNegotiation(long expected,int identity,int capabilities,boolean armed) {
+        if(expected!=generation || suspended)return false;
+        boolean requested=themeSessionStart();
+        boolean active=requested && armed;
+        negotiation=new NegotiationStatus(generation,!vehicles.isEmpty() && (identity&5)==5,
+                !themes.isEmpty() && (identity&2)!=0,requested,active,
+                active && (capabilities&1)!=0,active && (capabilities&2)!=0);
+        return true;
+    }
 
     static final class Snapshot {
         final long generation;
@@ -36,6 +48,7 @@ final class IdentityRegistry implements CarPlayIdentification {
 
     private void invalidate() {
         generation++;
+        negotiation=new NegotiationStatus(generation,false,false,!suspended && themeSessionStart(),false,false,false);
         status=new IdentityStatus(generation,suspended || (vehicles.isEmpty() && themes.isEmpty())
                 ? Readiness.UNAVAILABLE : Readiness.REGISTERED,suspended?"identity suspended":"contributions changed");
     }
