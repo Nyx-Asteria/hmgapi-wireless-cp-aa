@@ -56,8 +56,26 @@ static u32 start_notify(u32 link,u32 session,const unsigned char *params,u32 n){
     if(!current){packet_destroy(packet);__atomic_store_n(&start_last,-4,__ATOMIC_RELEASE);__atomic_add_fetch(&start_stale,1,__ATOMIC_RELEASE);return 0;}
     unsigned char *buf=session_malloc(len,"carplaystart",1);
     if(!buf){packet_destroy(packet);__atomic_store_n(&start_last,-3,__ATOMIC_RELEASE);__atomic_add_fetch(&start_alloc_failed,1,__ATOMIC_RELEASE);return 0;}
-    for(u32 i=0;i<len;i++)buf[i]=snapshot[i];
+    // K5 fc7cb675: PacketDestroy frees the payload at offset 4 and then
+    // the packet. Attach before the final check so rejection has one owner.
     ((u32*)packet)[1]=(u32)buf;((u32*)packet)[2]=len;
+    if(lock_mutex(&identity_mutex)){
+        packet_destroy(packet);
+        __atomic_add_fetch(&start_lock_failed,1,__ATOMIC_RELEASE);
+        return 0;
+    }
+    current=__atomic_load_n(&configured,__ATOMIC_ACQUIRE) && has_theme
+        && start_len==len && start_generation==generation;
+    if(current)for(u32 i=0;i<len;i++)buf[i]=snapshot[i];
+    unlock_mutex(&identity_mutex);
+    if(!current){
+        packet_destroy(packet);
+        __atomic_store_n(&start_last,-4,__ATOMIC_RELEASE);
+        __atomic_add_fetch(&start_stale,1,__ATOMIC_RELEASE);
+        return 0;
+    }
+    // No OEM dispatch under the identity mutex. A withdrawal after this
+    // admission point cannot revoke an already admitted response.
     int rc=send_packet(packet);
     __atomic_store_n(&start_last,rc,__ATOMIC_RELEASE);
     __atomic_add_fetch(&start_sends,1,__ATOMIC_RELEASE);
