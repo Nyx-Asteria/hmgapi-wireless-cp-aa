@@ -392,7 +392,7 @@
     },
     {
       "id": "audio",
-      "when": "settings.audio"
+      "when": "settings.bridge"
     }
   ],
   "feature_flags": [
@@ -485,21 +485,6 @@
       {
         "chain": "input",
         "in": "hotspot",
-        "to": "hotspot",
-        "ip": 4,
-        "proto": "tcp",
-        "ports": [
-          40515
-        ],
-        "state": [
-          "new"
-        ],
-        "action": "accept",
-        "when": "settings.aa_firewall"
-      },
-      {
-        "chain": "input",
-        "in": "hotspot",
         "ip": 4,
         "proto": "tcp+udp",
         "ports": [
@@ -514,7 +499,7 @@
         ],
         "both_ways": true,
         "action": "accept",
-        "when": "settings.cp_firewall"
+        "when": "settings.bridge"
       },
       {
         "chain": "input",
@@ -534,7 +519,7 @@
         ],
         "both_ways": true,
         "action": "accept",
-        "when": "settings.cp_firewall"
+        "when": "settings.bridge"
       },
       {
         "chain": "input",
@@ -542,18 +527,29 @@
         "ip": 6,
         "proto": "icmpv6",
         "action": "accept",
-        "when": "settings.cp_firewall"
+        "when": "settings.bridge"
       }
     ]
   },
   "services": [
     {
-      "name": "wcp-session-export", "jar": "hooks.jar", "class": "hmgapi.mods.sessionexport.SessionExporter", "args": ["wcp"],
+      "name": "wcp-session-export",
+      "jar": "hooks.jar",
+      "class": "hmgapi.mods.sessionexport.SessionExporter",
+      "args": [
+        "wcp"
+      ],
       "user": "root",
       "start": "android",
       "restart": true
     },
-    {"name": "wcp-native-session-export", "script": "export-sessions.sh", "user": "root", "start": "android", "restart": true}
+    {
+      "name": "wcp-native-session-export",
+      "script": "export-sessions.sh",
+      "user": "root",
+      "start": "android",
+      "restart": true
+    }
   ],
   "usb": [
     "WCP-LOGS"

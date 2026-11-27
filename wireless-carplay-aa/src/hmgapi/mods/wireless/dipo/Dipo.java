@@ -98,16 +98,16 @@ public final class Dipo {
             try { journal = new SessionJournal(a.context, "wcp-carplay-sessions"); }
             catch (Throwable t) { m.error("CarPlay session journal unavailable", t); }
         }
-        tbt = m.settingBoolean("tbt", true);
+        tbt = m.settingBoolean("tbt", false);
         bridge = m.settingBoolean("bridge", true);
-        nowPlaying = bridge && m.settingBoolean("now_playing", true);
+        nowPlaying = bridge;
         CarPlayLog.on = m.settingBoolean("carplay_log", false);
         CarPlayLog.apply("start");
         try { installSessionJournal(m, a); }
         catch (Throwable t) { m.error("CarPlay session journal hook unavailable", t); }
         // the CarPlay libraries, patched in memory once DiPO loads them (files stay stock)
         if (bridge) m.nativePatch(a, "libCarPlayCore.so");   // AirPlay sessions over Wi-Fi
-        if (m.settingBoolean("audio", true)) {
+        if (bridge) {
             m.nativePatch(a, "libCarPlayAudio.so");   // offer AAC and Opus on Wi-Fi
             m.nativePatch(a, "libCarPlayUtils.so");   // its AudioConverter calls go to libleafiaaac.so
         }
@@ -275,8 +275,8 @@ public final class Dipo {
                 restartRouteGuidance();
             }
         });
-        turns.standardTurns = mod.settingBoolean("tbt_standard", false);
-        turns.sideStreets = turns.standardTurns && mod.settingBoolean("tbt_side_streets", false);
+        turns.standardTurns = true;
+        turns.sideStreets = turns.standardTurns;
         if (turns.standardTurns) log("CarPlay: turns in the car's own format near a maneuver (standard turns)"
                 + (turns.sideStreets ? ", with the iPhone's side streets" : ""));
         rg = new RgListener();

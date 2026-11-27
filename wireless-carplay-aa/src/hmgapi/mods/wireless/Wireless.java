@@ -84,10 +84,10 @@ public final class Wireless extends ModEntry {
     public void appLoaded(final ModContext mod, LoadedApp app) {
         if (NAVIGATION.equals(app.packageName)) navigation(mod, app);
         if (IAP2.equals(app.packageName)) iap2(mod, app);
-        if (GPM.equals(app.packageName) && mod.settingBoolean("usb_drives", true)) usbDrives(mod, app);
-        if (GPM.equals(app.packageName) && mod.settingBoolean("tbt", true)) gpmTurnByTurn(mod, app);
-        if (BTSETTINGS.equals(app.packageName) && mod.settingBoolean("menu", true)) phoneProjectionMenu(mod, app);
-        if (DIPO.equals(app.packageName) && (mod.settingBoolean("tbt", true) || mod.settingBoolean("bridge", true) || mod.settingBoolean("audio", true) || mod.settingBoolean("auto_open", true))) dipo(mod, app);
+        if (GPM.equals(app.packageName)) usbDrives(mod, app);
+        if (GPM.equals(app.packageName) && mod.settingBoolean("tbt", false)) gpmTurnByTurn(mod, app);
+        if (BTSETTINGS.equals(app.packageName) && mod.settingBoolean("bridge", true)) phoneProjectionMenu(mod, app);
+        if (DIPO.equals(app.packageName)) dipo(mod, app);
     }
 
     /**
@@ -113,7 +113,7 @@ public final class Wireless extends ModEntry {
      * Ioniq 5, 2026-11-03). Framework calls only: no app names.
      */
     private void navigation(final ModContext mod, final LoadedApp app) {
-        if (!mod.settingBoolean("tbt", true)) return;
+        if (!mod.settingBoolean("tbt", false)) return;
         // Keep stock navigation available when this mod cannot supply AA turns. CarPlay
         // and cars with GPM's own turn-by-turn retain their existing arbitration.
         final boolean aaGuidance = Car.stepOfSpec() >= 999 || aaTbtSupported();
@@ -138,9 +138,8 @@ public final class Wireless extends ModEntry {
      */
     private void iap2(final ModContext mod, LoadedApp app) {
         final ClassLoader cl = app.classLoader;
-        if (mod.settingBoolean("shared_identity", true)) IdentityInstaller.install(mod, app, identity);
-        else mod.log("CarPlay identity sharing is off; contributions are not applied");
-        if (mod.settingBoolean("tbt", true)) {
+        IdentityInstaller.install(mod, app, identity);
+        if (mod.settingBoolean("tbt", false)) {
             mod.hook(cl, "iap2.init_info.check_supports_features", new MethodHook() {
                 @Override
                 protected void afterHookedMethod(Param p) {
@@ -264,7 +263,7 @@ public final class Wireless extends ModEntry {
                                     hmgapi.hook.Cluster c = hmgapi.hook.Cluster.of(app.context);
                                     if (c == null) return;
                                     turns.put(receiver, t = new AaTurns(app.context, c, handler));
-                                    t.standardTurns = mod.settingBoolean("tbt_standard", false);
+                                    t.standardTurns = true;
                                     mod.log("Android Auto: navigation callback received; cluster bridge created"
                                             + (t.standardTurns ? " (standard turns)" : ""));
                                 }
