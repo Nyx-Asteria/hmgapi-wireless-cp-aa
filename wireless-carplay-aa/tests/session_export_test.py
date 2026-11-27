@@ -53,8 +53,10 @@ for modern in (False, True):
             + 'case "$n" in\n'
             + '1) [ ! -e "' + str(d / "starts") + '" ] && [ ! -e "' + str(native / "session-999.native-ready") + '" ] || touch "' + str(d / "orphan-violation") + '"; rm "' + str(foreign / "fd" / "3") + '";;\n'
             + '2) [ ! -e "' + str(dest) + '" ] || exit 99; echo "dev ' + str(usb) + ' vfat rw 0 0" > "' + str(mounts) + '";;\n'
-            + '5) [ ! -e "' + str(native / "session-001.native-ready") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
-            + '7) kill -TERM "$PPID";;\nesac\n')
+            + '4) ln -s "' + str(native / "session-999.native.log") + '" "' + str(foreign / "fd" / "3") + '";;\n'
+            + '5) [ "$(cat "' + str(d / "starts") + '" | wc -l)" -eq 2 ] || touch "' + str(d / "late-violation") + '"; rm "' + str(foreign / "fd" / "3") + '";;\n'
+            + '7) [ ! -e "' + str(native / "session-001.native-ready") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
+            + '9) kill -TERM "$PPID";;\nesac\n')
         sleep.chmod(0o755)
         script = (root / "export-sessions.sh").read_text()
         script = script.replace("/data/data/com.daudio.app.dipo/files/wcp-carplay-sessions", str(src))
@@ -64,10 +66,12 @@ for modern in (False, True):
         script = script.replace("proc_root=/proc", "proc_root=" + str(proc))
         subprocess.run(["sh", "-c", script], env={**os.environ, "PATH":str(binpath)+":"+os.environ["PATH"]},
                        check=True, timeout=15)
-        assert (d / "starts").read_text().splitlines() == ["started", "started"], "dead collector must restart exactly once" 
+        assert (d / "starts").read_text().splitlines() == ["started", "started", "started"], "restart after failure and late foreign writer" 
         assert ("-T 200" in (d / "args").read_text()) == modern
         assert not (d / "premature").exists()
+        assert not (d / "late-violation").exists(), "no replacement while late writer remains"
         assert not (d / "orphan-violation").exists(), "must not start or publish while foreign writer exists"
+        assert (native / "session-999.native-ready").is_file(), "readiness resumes after foreign writer disappears"
         assert (native / "session-001.native.log").read_text() == "native\n"
         assert (native / "session-001.native-ready").read_text().strip() == "ready"
         assert not dest.exists(), "native collector must not write USB"
