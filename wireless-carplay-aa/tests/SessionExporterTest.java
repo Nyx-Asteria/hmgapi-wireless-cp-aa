@@ -39,11 +39,13 @@ public final class SessionExporterTest {
     }
     public static void main(String[] args) throws Exception {
         hashRegression();
+        File root = Files.createTempDirectory("java-session-export").toFile();
         // Remove every JCA provider during the actual export regression.
         java.security.Provider[] providers=java.security.Security.getProviders();
         for(java.security.Provider provider:providers) java.security.Security.removeProvider(provider.getName());
         try {
-        File root = Files.createTempDirectory("java-session-export").toFile();
+        try { java.security.MessageDigest.getInstance("SHA-256"); throw new AssertionError("provider unexpectedly available"); }
+        catch(java.security.NoSuchAlgorithmException expected) {}
         try {
             File spool = new File(root, "spool"), usb = new File(root, "usb");
             check(spool.mkdir() && usb.mkdir(), "directories");
