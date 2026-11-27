@@ -26,6 +26,8 @@ public class ReceiveTest {
     static final int MAX_PENDING = 64;
     static final ArrayList<byte[]> sPendingIn = new ArrayList<>();
     static long diagnosticRxOverflow;
+    static long diagnosticRxAttempts, diagnosticRxFailures, diagnosticRxTotalMs, diagnosticRxMaxMs;
+    static long now() { return System.nanoTime()/1000000L; }
     static boolean rxDraining;
     static long rxGeneration;
     static void startCpClient(String why, long generation) {
@@ -37,7 +39,7 @@ public class ReceiveTest {
     static int errors;
     static void error(String why, Throwable t) { errors++; }
 """ + "\n".join(method(s) for s in (
-    "static void onCpIapIn(", "static boolean onCpClientConnected(", "private static void acceptReceive(", "private static void flushPending(", "private static void resetReceive("
+    "static void onCpIapIn(", "static boolean onCpClientConnected(", "private static void acceptReceive(", "private static void flushPending(", "private static void resetReceive(", "private static void replaceReceiveService("
 )) + """
     static void check(boolean v,String msg) { if(!v) throw new AssertionError(msg); }
     static void send(int n) { onCpIapIn(null,new byte[]{(byte)n},1); }
@@ -93,6 +95,26 @@ public class ReceiveTest {
         check(onCpClientConnected(rxGeneration) && seen.get(seen.size()-1)==16,"current connection drains");
         sUsb=true;resetReceive();
         check(!onCpClientConnected(rxGeneration),"USB rejects connection");
+        check(diagnosticRxFailures==1 && diagnosticRxAttempts>0,"aggregate receive metrics");
+        sUsb=false; sCpClient=true;
+        seen.clear();
+        CountDownLatch serviceEntered=new CountDownLatch(1), serviceRelease=new CountDownLatch(1);
+        IIap2Service oldService=(b,n)->{seen.add((int)b[0]);serviceEntered.countDown();await(serviceRelease);};
+        replaceReceiveService(oldService);
+        onCpClientConnected(rxGeneration);
+        Thread blocked=new Thread(()->send(17));blocked.setDaemon(true);blocked.start();await(serviceEntered);
+        send(18);
+        long prior=rxGeneration;
+        IIap2Service replacement=(b,n)->seen.add((int)b[0]);
+        replaceReceiveService(replacement);
+        check(rxGeneration!=prior && !sCpConnected && sPendingIn.isEmpty(),"replacement invalidates old link");
+        send(19);check(seen.equals(Arrays.asList(17)),"replacement waits for connection");
+        check(onCpClientConnected(rxGeneration),"replacement connects");
+        serviceRelease.countDown();blocked.join(3000);
+        check(!blocked.isAlive() && seen.equals(Arrays.asList(17,19)),"old service cannot drain replacement");
+        long stable=rxGeneration;
+        replaceReceiveService(replacement);
+        check(stable==rxGeneration && sCpConnected,"same service does not reset");
         System.out.println("Bridge receive FIFO, copy, overflow, concurrent enqueue, failure and USB checks passed");
     }
 }

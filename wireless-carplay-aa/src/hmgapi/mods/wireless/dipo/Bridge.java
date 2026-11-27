@@ -88,6 +88,7 @@ final class Bridge {
     private static final ArrayList<byte[]> sPendingIn = new ArrayList<byte[]>();
     // Process-lifetime count; guarded by sPendingIn.
     private static long diagnosticRxOverflow;
+    private static long diagnosticRxAttempts, diagnosticRxFailures, diagnosticRxTotalMs, diagnosticRxMaxMs;
     private static BtListener sBt;
     private static TxListener sTx;
     /** CarPlay-channel sends: one sender thread + queue per link (a re-attach abandons the dead link's) */
@@ -131,7 +132,7 @@ final class Bridge {
     static void onIap2Bound(IIap2Service s) {
         if (s == null) return;
         try {
-            sIap2 = s;
+            replaceReceiveService(s);
             synchronized (Bridge.class) {
                 if (sTx == null) sTx = new TxListener();
             }
@@ -139,6 +140,7 @@ final class Bridge {
             info.onSetSupportType(LISTENER_EXTERNAL_BT_TRANSPORT | LISTENER_EXTERNAL_CARPLAY_TRANSPORT);
             info.onSetListenerName("EV6_CPWL_BT");
             log("Iap2SvcInit(EV6_CPWL_BT, 0xc00) = " + s.Iap2SvcInit(sTx, info));
+            flushPending();
         } catch (Throwable t) {
             error("onIap2Bound", t);
         }
@@ -333,16 +335,22 @@ final class Bridge {
         attachGeneration.advance();
         try {
             int pendingCount;
-            long rxOverflow;
+            long rxOverflow, rxAttempts, rxFailures, rxTotalMs, rxMaxMs;
             synchronized (sPendingIn) {
                 pendingCount = sPendingIn.size();
                 rxOverflow = diagnosticRxOverflow;
+                rxAttempts = diagnosticRxAttempts;
+                rxFailures = diagnosticRxFailures;
+                rxTotalMs = diagnosticRxTotalMs;
+                rxMaxMs = diagnosticRxMaxMs;
             }
             long elapsed = diagnosticStartedAt == 0 ? -1 : now() - diagnosticStartedAt;
             log("CarPlay teardown snapshot type=" + type + " durationMs=" + elapsed
                     + " wireless=" + sCpWireless + " client=" + sCpClient
                     + " connected=" + sCpConnected + " rxPending=" + pendingCount
                     + " rxOverflowTotal=" + rxOverflow
+                     + " rxAttemptsTotal=" + rxAttempts + " rxFailuresTotal=" + rxFailures
+                     + " rxBinderTotalMs=" + rxTotalMs + " rxBinderMaxMs=" + rxMaxMs
                     + " " + sCpTx.diagnosticSnapshot());
             diagnosticStartedAt = 0;
             diagnosticCreatedAt = 0;
@@ -439,6 +447,14 @@ final class Bridge {
     private static boolean rxDraining;
     private static long rxGeneration;
 
+    // A new service must establish its own link before consuming wireless packets.
+    private static void replaceReceiveService(IIap2Service service) {
+        synchronized (sPendingIn) {
+            if (sIap2 != null && sIap2 != service) resetReceive();
+            sIap2 = service;
+        }
+    }
+
     private static void resetReceive() {
         synchronized (sPendingIn) {
             sCpConnected = false;
@@ -467,10 +483,21 @@ final class Bridge {
                 }
                 packet = sPendingIn.remove(0);
             }
+            long began = now();
+            boolean failed = false;
             try {
                 service.Iap2SvcTransportReadDone(packet, packet.length);
             } catch (Throwable t) {
+                failed = true;
                 error("ordered receive delivery", t);
+            } finally {
+                long elapsed = Math.max(0, now() - began);
+                synchronized (sPendingIn) {
+                    diagnosticRxAttempts++;
+                    if (failed) diagnosticRxFailures++;
+                    diagnosticRxTotalMs += elapsed;
+                    diagnosticRxMaxMs = Math.max(diagnosticRxMaxMs, elapsed);
+                }
             }
         }
     }
