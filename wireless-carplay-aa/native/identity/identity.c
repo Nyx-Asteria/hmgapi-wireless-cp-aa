@@ -94,9 +94,10 @@ static void *identity_value(u16 id,u16 type,u16 *n,void *key,int *more){
     if(id==WIRELESS_GROUP && has_theme && wireless_lookup && stock_children){
         void *stock=original(id,type,n,key,more);
         stock_wireless_lookup=(Lookup)stock;
-        // Keep the stock callback (including NULL) for unsupported child lists.
-        // For a supported list the wrapper preserves OEM values for unowned IDs.
-        if(!stock || !theme_children_active)return stock;
+        // Root lookup can precede child-table selection. Defer the decision
+        // to wireless_value, which checks the selected table at value lookup.
+        // A NULL OEM callback remains NULL.
+        if(!stock)return stock;
         return (void*)wireless_value;
     }
     return original(id,type,n,key,more);

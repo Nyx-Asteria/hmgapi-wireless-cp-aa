@@ -156,11 +156,17 @@ int test_main(void){
     // Preserve the actual OEM root callback and metadata on fallback.
     build_lookup=alternate_root;
     more=0;
-    if(identity_value(24,13,&child_count,0,&more)!=(void*)alternate_wireless || more!=3)result|=1;
+    Lookup early=(Lookup)identity_value(24,13,&child_count,0,&more);
+    if(early!=wireless_value || more!=3)result|=1;
+    if(early(6,10,&child_count,0,&more)!=&value || more!=7 || (identity_seen&2))result|=1;
     stock_wireless_count=4;
     children=identity_children(24,13,&child_count,0,&more);
-    if(!children || identity_value(24,13,&child_count,0,&more)!=(void*)wireless_value)result|=1;
-    if(wireless_value(0,5,&child_count,0,&more)!=&value || more!=7)result|=1;
+    if(!children || early(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))result|=1;
+    if(early(0,5,&child_count,0,&more)!=&value || more!=7)result|=1;
+    stock_wireless_count=WIRELESS_MAX+1;
+    identity_seen=0;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(children!=stock_wireless || early(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
     build_lookup=0;stock_wireless_lookup=0;
     stock_wireless_count=2;
     // Native tuple parser mirrors the Java API, including uint32 bounds.
