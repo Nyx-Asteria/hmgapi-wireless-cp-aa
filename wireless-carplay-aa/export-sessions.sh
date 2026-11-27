@@ -73,6 +73,8 @@ prune_native() {
 # Prefer a short historical tail when supported; older Android logcat lacks -T.
 # The fallback reads the existing bounded ring before following live output.
 start_native() {
+    # Recheck immediately before starting, including retry and session switches.
+    if foreign_writer; then return 1; fi
     native_session=$1
     if logcat -h 2>&1 | grep -E '(^|[[:space:]])-T([[:space:],]|$)' >/dev/null; then
         set -- -T 200
@@ -86,9 +88,14 @@ start_native() {
 # The DiPO journal creates a per-session marker only when carplay_log is enabled.
 
 while true; do
-    # Scan only while we do not own a running collector, including startup and
-    # finalization. Never certify a native file with an unowned writer present.
-    if [ -z "$native_pid" ] && foreign_writer; then
+    # A foreign writer may open its file after our startup scan. Check even
+    # when we own a collector; stop only our own child if ownership conflicts.
+    if foreign_writer; then
+        stop_native
+        native_session=
+        retry_ticks=0
+        retry_delay=1
+        healthy_ticks=0
         if [ "$foreign_reported" -eq 0 ]; then
             echo "Native collector suspended: unowned logcat writer detected" >&2
             foreign_reported=1
@@ -111,7 +118,7 @@ while true; do
         retry_delay=1
         healthy_ticks=0
         [ -z "$current" ] || start_native "$current"
-        prune_native
+        if ! foreign_writer; then prune_native; fi
     fi
     # Keep polling the session marker during backoff; never sleep through teardown.
     if [ -n "$current" ] && [ "$current" = "$native_session" ]; then
@@ -139,7 +146,9 @@ while true; do
         fi
     fi
     # Publish readiness only after logcat has stopped writing the session.
-    if [ -z "$native_pid" ] && foreign_writer; then
+    if foreign_writer; then
+        stop_native
+        native_session=
         sleep 2
         continue
     fi
