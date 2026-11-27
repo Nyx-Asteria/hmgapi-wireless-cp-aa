@@ -6,7 +6,7 @@ void *memcpy(void *d,const void *s,u32 n){char *a=d;const char *b=s;while(n--)*a
 void *__aeabi_memcpy(void *d,const void *s,u32 n){char *a=d;const char *b=s;while(n--)*a++=*b++;return d;}
 void *__aeabi_memcpy4(void *d,const void *s,u32 n){return __aeabi_memcpy(d,s,n);}
 
-char output[4][1024];
+char output[6][1024];
 int result;
 static u32 at,value=42,mailbox,slot;
 static Param root[24],stock_info[5],stock_status[13],stock_wireless[2];
@@ -62,12 +62,19 @@ int test_main(void){
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     result|=configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=3;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    result|=configure("Kia K5",6,0,-1,0,-1,0,"",0,0);slot=4;
+    identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    result|=configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=5;
+    identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(configure("Kia K5",6,0,0,235000,2,10900,"",0,0)!=-12)result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";
 static const char expected_both[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;24.6=THEME1;]";
 static const char expected_theme[]="[24:24.0=42;24.1=stock;24.6=THEME1;]";
 static const char expected_legacy[]="[24:24.0=42;24.1=stock;24.5=;24.6=THEME1:985:19.0;]";
+static const char expected_gas[]="[20:20.0=42;20.1=42;20.2=0;20.6=Kia K5;20.8=Kia K5;][24:24.0=42;24.1=stock;]";
+static const char expected_gas_theme[]="[20:20.0=42;20.1=42;20.2=0;20.6=Kia K5;20.8=Kia K5;][24:24.0=42;24.1=stock;24.5=;24.6=THEME1:985:19.0;]";
 static const char pass[]="PASS Wireless serializer output is byte-for-byte equivalent to the former EV Routing serializer\n";
 static const char fail[]="FAIL Wireless serializer output differs from the former EV Routing serializer\n";
 static const char start[]="Running ARM CarPlay identity comparison\n";
@@ -77,7 +84,7 @@ static void semihost(u32 operation,const void *argument){
     __asm__ volatile("svc 0x123456"::"r"(r0),"r"(r1):"memory");
 }
 void run(void){
-    semihost(4,start);test_main();int ok=result==0 && same(output[0],expected_vehicle) && same(output[1],expected_both) && same(output[2],expected_theme) && same(output[3],expected_legacy);
+    semihost(4,start);test_main();int ok=result==0 && same(output[0],expected_vehicle) && same(output[1],expected_both) && same(output[2],expected_theme) && same(output[3],expected_legacy) && same(output[4],expected_gas) && same(output[5],expected_gas_theme);
     if(!ok){semihost(4,output[0]);semihost(4,"\n");semihost(4,output[1]);semihost(4,"\n");semihost(4,output[2]);semihost(4,"\n");}
     semihost(4,ok?pass:fail);
     u32 status[2]={0x20026,ok?0:1};semihost(0x20,status);for(;;){}

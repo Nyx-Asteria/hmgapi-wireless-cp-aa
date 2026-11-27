@@ -138,6 +138,18 @@ public final class Wireless extends ModEntry {
      */
     private void iap2(final ModContext mod, LoadedApp app) {
         final ClassLoader cl = app.classLoader;
+        if (mod.settingBoolean("k5_vehicle_identity", false)) {
+            try {
+                identity.registerVehicle("wireless-carplay-aa",
+                        new hmgapi.mods.wireless.api.CarPlayIdentification.VehicleIdentity(
+                                "Kia K5",
+                                hmgapi.mods.wireless.api.CarPlayIdentification.VehicleIdentity.ENGINE_GASOLINE,
+                                new hmgapi.mods.wireless.api.CarPlayIdentification.Connector[0]));
+                mod.log("CarPlay identity: opt-in gasoline Kia K5 profile registered");
+            } catch (RuntimeException conflict) {
+                mod.error("CarPlay identity: K5 profile registration refused; existing owner retained", conflict);
+            }
+        }
         IdentityInstaller.install(mod, app, identity);
         if (mod.settingBoolean("tbt", false)) {
             mod.hook(cl, "iap2.init_info.check_supports_features", new MethodHook() {

@@ -32,6 +32,14 @@
       "title": "Extended session diagnostics",
       "apply": "restart",
       "description": "Include detailed native CarPlay logs in automatic WCP-LOGS session exports. Basic Java session journals are always collected. Native logs may contain private device information."
+    },
+    {
+      "key": "k5_vehicle_identity",
+      "type": "toggle",
+      "default": false,
+      "title": "Kia K5 gasoline vehicle identity",
+      "apply": "restart",
+      "description": "Opt in only on a gasoline Kia K5. Advertise Kia K5 and gasoline engine type without EV charging connectors. Off preserves OEM vehicle identity and allows existing companion EV contributions."
     }
   ]
 }
