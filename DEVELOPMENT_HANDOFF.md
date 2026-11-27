@@ -153,6 +153,9 @@ Parent ea044eedf4dc9a7b72738901bbe0c2baeb33e95b. Completed actual streaming cont
 ## Current priority override — CPUL API v3 integration approved
 User explicitly supersedes every historical entry requiring FileTransfer completion before CPUL integration. The primary checkpoint is 3b951c745ce78fde4ca6085b28d682c7d629bb98; see docs/cpul-api-v3-integration.md for exact pinned contract, CI evidence and known limitations. No release. FileTransfer research continues independently, starting with transport ownership rather than guessed wire implementation. All future experimental paths default off. Historical entries below/above are retained for provenance, not active gating rules.
 
+## Independent FileTransfer cycle — acquisition/transport separation
+Parent 75f1ecadc704e39be9095799f62bea64aa79bf4d. Integration handoff CI confirmed green (https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46066118985). Directly reopened original metadata and scanned three supplied log ZIPs for transport/librarian terms. Documented exact CARThemeAsset URL accessors and agent notification symbols, plus bounded log search negative results. This narrows investigation to actual librarian implementation and URL origin, not assumed FTv2. Primary shared identity checkpoint remains 100% implementation/green at 3b951c7; FileTransfer research 45%, transport identification preliminary (10% estimate), translation/native/conditional runtime 0%. No release, no CPUL edits, new docs CI pending.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
