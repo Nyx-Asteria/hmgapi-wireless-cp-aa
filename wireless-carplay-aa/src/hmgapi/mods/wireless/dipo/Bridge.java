@@ -281,21 +281,15 @@ final class Bridge {
             byte[] b = new byte[len];
             System.arraycopy(data, 0, b, 0, len);
             if (!sCpClient) startCpClient("iAP2 data from CarPlay channel");
-            final IIap2Service s;
             synchronized (sPendingIn) {
-                // Decide whether to queue while holding the same lock used by the
-                // connection callback's drain. Otherwise a packet can be queued
-                // just after that callback drains the pending list.
-                s = sIap2;
-                if (!sCpConnected || s == null) {
-                    if (sPendingIn.size() < MAX_PENDING) sPendingIn.add(b);
-                    else diagnosticRxOverflow++;
+                if (!sCpClient || sUsb) return;
+                if (sPendingIn.size() >= MAX_PENDING) {
+                    diagnosticRxOverflow++;
                     return;
                 }
+                sPendingIn.add(b);
             }
-            // Never hold the pending-list monitor across Binder calls.
-            flushPending(s);
-            s.Iap2SvcTransportReadDone(b, len);
+            flushPending();
         } catch (Throwable t) {
             error("onCpIapIn", t);
         }
@@ -389,31 +383,33 @@ final class Bridge {
 
     static void onCpClientConnected() {
         sCpConnected = true;
-        IIap2Service s = sIap2;
-        if (s != null) flushPending(s);
+        flushPending();
     }
 
-    private static void flushPending(IIap2Service s) {
-        ArrayList<byte[]> all;
+    // Exactly one drain owner; callbacks can enqueue during Binder delivery.
+    private static boolean rxDraining;
+    private static void flushPending() {
         synchronized (sPendingIn) {
-            if (sPendingIn.isEmpty()) return;
-            all = new ArrayList<byte[]>(sPendingIn);
-            sPendingIn.clear();
+            if (rxDraining || !sCpConnected || sIap2 == null || !sCpClient || sUsb) return;
+            rxDraining = true;
         }
-        int delivered = 0, failed = 0;
-        long began = now();
-        for (byte[] b : all) {
+        while (true) {
+            final byte[] packet;
+            final IIap2Service service;
+            synchronized (sPendingIn) {
+                service = sIap2;
+                if (!sCpClient || sUsb || !sCpConnected || service == null || sPendingIn.isEmpty()) {
+                    rxDraining = false;
+                    return;
+                }
+                packet = sPendingIn.remove(0);
+            }
             try {
-                s.Iap2SvcTransportReadDone(b, b.length);
-                delivered++;
+                service.Iap2SvcTransportReadDone(packet, packet.length);
             } catch (Throwable t) {
-                failed++;
-                error("flushPending", t);
+                error("ordered receive delivery", t);
             }
         }
-        log("CarPlay buffered receive flush attempted=" + all.size()
-                + " returnedNormally=" + delivered + " threw=" + failed
-                + " elapsedMs=" + (now() - began));
     }
 
     private static Method nativeSend() {
