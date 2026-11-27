@@ -9,7 +9,7 @@ void *__aeabi_memcpy4(void *d,const void *s,u32 n){return __aeabi_memcpy(d,s,n);
 char output[6][1024];
 int result;
 static u32 at,value=42,mailbox,slot;
-static Param root[24],stock_info[5],stock_status[13],stock_wireless[4];
+static Param root[24],stock_info[5],stock_status[13],stock_wireless[WIRELESS_MAX+1];
 static u16 stock_wireless_count=2;
 static void put(const char *s){while(*s && at<sizeof(output[0])-1)output[slot][at++]=*s++;output[slot][at]=0;}
 static void num(u32 v){
@@ -120,7 +120,19 @@ int test_main(void){
     children=identity_children(24,13,&child_count,0,&more);
     if(child_count!=4 || children[2].id!=5 || children[2].type!=8
        || children[3].id!=6 || children[3].type!=10)result|=1;
-    legacy_theme=1;stock_wireless_count=2;
+    legacy_theme=1;
+    // A child list alone is not evidence that the theme value was consumed.
+    identity_seen=0;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(!theme_children_active || (identity_seen&2))result|=1;
+    if(wireless_value(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))result|=1;
+    // Unsupported stock table size must retain stock values, not inject
+    // the configured theme through the lookup wrapper.
+    identity_seen=0;stock_wireless_count=WIRELESS_MAX+1;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(children!=stock_wireless || child_count!=WIRELESS_MAX+1 || theme_children_active
+       || wireless_value(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
+    stock_wireless_count=2;
     /* Rejecting malformed replacements must erase the old native payload. */
     static const unsigned char invalid[]={0x40,0x40,0,6,0x43,0};
     start_len=6;for(u32 i=0;i<6;i++)start_msg[i]=0x55;
