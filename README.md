@@ -1,7 +1,6 @@
 # Wireless CarPlay + Android Auto for HMG-API
 
-Use wireless CarPlay and Android Auto on a compatible Gen5W head unit through the
-car's own Wi-Fi hotspot. The mod also brings experimental phone navigation (turn-by-turn) to the instrument
+This fork's RC6 development focuses on wireless CarPlay on compatible Gen5W head units through the car's own Wi-Fi hotspot. Existing Android Auto code is retained but is not newly validated. The mod also brings experimental phone navigation (turn-by-turn) to the instrument
 cluster and head-up display (HUD) on compatible hardware and firmware.
 
 [Download the mod](https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/releases) ·
@@ -30,8 +29,8 @@ For the full list of model codes and firmware the installer accepts, see
 
 ## Install and connect
 
-1. Install or update HMG-API. Fork version **2.2.1-rc.4** requires **HMG-API
-   1.1.0-rc.8 or newer**. [HMG-API installation guide](https://github.com/Open-HMG/HMG-API/wiki/Installing-HMG-API)
+1. Install or update HMG-API. The unpublished fork candidate **2.2.1-rc.6** requires **HMG-API
+   1.1.0-rc.10 or newer**. For released packages, consult their release notes. [HMG-API installation guide](https://github.com/Open-HMG/HMG-API/wiki/Installing-HMG-API)
 2. Download `wireless-carplay-aa-<version>.zip` and copy it, still zipped, into
    `HMGAPI/updates/` on a USB stick. [Mod releases](https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/releases)
 3. Plug in the stick. In HMG-API, select **Check USB updates**, then **Wireless
@@ -59,25 +58,16 @@ in HMG-API and tap **Apply changes** to restore the files the mod changed.
 Open the mod in HMG-API to change its settings. Tap **Save settings** before
 **Apply changes**, then restart the head unit if prompted.
 
-- **Wireless CarPlay audio and Now Playing** add music and Siri over Wi-Fi and
-  refresh song, artist and album art after connection.
-- **Phone Projection** opens **Device Connections** from the settings menu on US
-  and Canadian builds. USB drives and hubs can stay plugged in without
-  triggering wired Android Auto.
-- **Experimental: Turn-by-turn directions** appear on the cluster and HUD where supported.
-  Android Auto guidance requires a matching firmware recipe. For an AR HUD, try
-  the optional **Turns in the car's own format (AR HUD arrow, distance bar)**
-  setting. [AR HUD behavior and test coverage](docs/ar-hud.md)
-- **Experimental: Park and reconnect** ends the wireless session when you park and leave so
-  calls and audio return to your phone. When you start the car, the head unit
-  asks the last phone to reconnect. Pick another phone in **Device Connections**
-  to switch.
+- **Enable wireless CarPlay** (default on, rebuild): Bluetooth handover, Wi-Fi audio, Now Playing, Device Connections and hotspot-scoped CarPlay firewall rules. Disabling this does not remove global projection feature flags.
+- **Automatically open CarPlay** (default on, restart): open CarPlay once when a wireless session connects.
+- **Integrated turn-by-turn** (default off, rebuild): built-in cluster guidance, stock turn formatting and experimental intersection detail. Keep disabled with Standalone TBT.
+- **Extended session diagnostics** (default off, restart): optional detailed native logs. Basic Java journals are automatic; finalized recordings are exported to WCP-LOGS on mounted USB. Native logs can contain private device information.
+
+Shared CarPlay identity is always enabled. Legacy individual firewall and audio controls are no longer exposed.
 
 ## Troubleshooting
 
-- **Your phone finds the car but won't connect.** Try the hotspot firewall
-  option for CarPlay or Android Auto in the mod's settings. Both options are off
-  by default. Tap **Save settings**, then **Apply changes**, and retry.
+- **Your phone finds the car but won't connect.** Verify that Enable wireless CarPlay is on and the head unit has working Wi-Fi provisioning. Tap **Save settings**, then **Apply changes**, and retry.
   [CarPlay setup notes](docs/cn7npe-usa-260903.md) ·
   [Android Auto setup notes](docs/ioniq6-can-260206.md)
 - **HMG-API says the hook map is missing.** Send a Car Report to
@@ -103,4 +93,4 @@ Restores direct OEM hotspot startup while retaining upstream navigation fixes an
 
 ## Current K5 fork — 2.2.1-rc.4
 
-The US K5 wireless connection, aggressive reconnection and automatic opening have been reported working on firmware 260507. Initial connection latency remains an open issue. For use with Standalone TBT, disable WCP's **Turn-by-turn on the cluster and HUD** (rebuild), retain the wireless bridge and Now Playing, apply changes and restart. See [update guide](UPDATE.md). No new transport or identification patches were made during the Standalone TBT Waze investigation.
+The US K5 wireless connection, aggressive reconnection and automatic opening have been reported working on firmware 260507. Initial connection latency remains an open issue. For use with Standalone TBT, disable WCP's **Integrated turn-by-turn** (rebuild), retain **Enable wireless CarPlay**, apply changes and restart. See [update guide](UPDATE.md). No new transport or identification patches were made during the Standalone TBT Waze investigation.

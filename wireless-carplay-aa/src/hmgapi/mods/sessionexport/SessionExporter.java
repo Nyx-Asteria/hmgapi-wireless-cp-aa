@@ -24,9 +24,9 @@ public final class SessionExporter {
             try {
                 for (String path : ROOTS) {
                     File root = new File(path);
-                    if (!mounted(root, new File("/proc/mounts"))) continue;
+                    if (!mounted(root, new File("/proc/self/mountinfo"))) continue;
                     try {
-                        MountGuard guard = new MountGuard(root, new File("/proc/mounts"));
+                        MountGuard guard = new MountGuard(root, new File("/proc/self/mountinfo"));
                         File dest = child(root, prefix);
                         Exception first = null;
                         try { exportDirectory(new File(files, args[0] + "-carplay-sessions"), dest, "sessions", guard); }
@@ -79,8 +79,11 @@ public final class SessionExporter {
             String line;
             while ((line = in.readLine()) != null) {
                 String[] fields = line.split(" ");
-                if (fields.length > 2 && (fields[1].equals(root.getPath()) || fields[1].equals(canonical)))
-                    return fields[0] + " " + fields[1] + " " + fields[2];
+                int separator = Arrays.asList(fields).indexOf("-");
+                if (separator >= 6 && fields.length > separator + 2
+                        && (fields[4].equals(root.getPath()) || fields[4].equals(canonical)))
+                    return fields[0] + " " + fields[2] + " " + fields[3] + " " + fields[4]
+                            + " " + fields[separator + 1] + " " + fields[separator + 2];
             }
         }
         return null;
