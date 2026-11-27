@@ -545,5 +545,17 @@
         "when": "settings.cp_firewall"
       }
     ]
-  }
+  },
+  "services": [
+    {
+      "name": "carplay-session-export",
+      "script": "export-sessions.sh",
+      "user": "root",
+      "start": "android",
+      "restart": true
+    }
+  ],
+  "usb": [
+    "WCP-LOGS"
+  ]
 }
