@@ -41,11 +41,14 @@ public final class SessionExporterTest {
             SessionExporter.exportDirectory(spool, logs, "sessions");
             check(!part.exists(), "stale partial cleared");
             put(target, "other data");
+            File later = new File(spool, "session-003.log");
+            put(later, "later complete session");
             try {
                 SessionExporter.exportDirectory(spool, logs, "sessions");
                 throw new AssertionError("conflict accepted");
             } catch (IOException expected) {}
             check(new String(Files.readAllBytes(target.toPath()), "UTF-8").equals("other data"), "conflict retained");
+            check(Arrays.equals(SessionExporter.digest(later), SessionExporter.digest(new File(dest, later.getName()))), "later session exported despite conflict");
             check(target.delete(), "remove conflict");
             put(part, "old partial");
             SessionExporter.exportDirectory(spool, logs, "sessions");
