@@ -16,7 +16,9 @@ final class SessionJournal {
     private static final int KEEP = 12, QUEUE = 256;
     private final Handler worker;
     private final File dir;
-    private final AtomicInteger queued = new AtomicInteger(), dropped = new AtomicInteger();
+    private final AtomicInteger queued = new AtomicInteger();
+    // Each accepted generation owns its own drop counter, even while old work drains.
+    private AtomicInteger dropped;
     private File active;
     private String header;
     private boolean writeFailed;
@@ -49,6 +51,7 @@ final class SessionJournal {
     synchronized void start(final String detail) {
         if (accepting) return;
         accepting = true;
+        dropped = new AtomicInteger();
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
         worker.post(new Runnable() { public void run() {
             active = null;
@@ -65,26 +68,29 @@ final class SessionJournal {
 
     synchronized void record(String message) {
         if (!accepting) return;
-        if (queued.incrementAndGet() > QUEUE) { queued.decrementAndGet(); dropped.incrementAndGet(); return; }
+        final AtomicInteger sessionDropped = dropped;
+        if (queued.incrementAndGet() > QUEUE) { queued.decrementAndGet(); sessionDropped.incrementAndGet(); return; }
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
         final String raw = bounded(message);
         if (!worker.post(new Runnable() { public void run() {
             try { if (active != null) {
-                int lost = dropped.getAndSet(0);
+                int lost = sessionDropped.getAndSet(0);
                 if (lost != 0) write(row("LOGGER dropped queued events=" + lost));
                 write(row(raw, wall, elapsed));
             }} finally { queued.decrementAndGet(); }
-        }})) queued.decrementAndGet();
+        }})) { queued.decrementAndGet(); sessionDropped.incrementAndGet(); }
     }
 
     synchronized void end(String reason) {
         if (!accepting) return;
         accepting = false;
+        final AtomicInteger sessionDropped = dropped;
+        dropped = null;
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
         final String raw = bounded("END " + reason);
         worker.post(new Runnable() { public void run() {
             if (active == null) return;
-            int lost = dropped.getAndSet(0);
+            int lost = sessionDropped.getAndSet(0);
             if (lost != 0) write(row("LOGGER dropped queued events=" + lost));
             write(row(raw, wall, elapsed));
             // Sync final bytes before exposing a completed file to the USB exporter.
