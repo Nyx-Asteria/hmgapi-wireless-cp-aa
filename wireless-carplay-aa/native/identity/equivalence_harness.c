@@ -113,6 +113,12 @@ int test_main(void){
     result|=configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=5;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     if(configure("Kia K5",6,0,0,235000,2,10900,"",0,0)!=-12)result|=1;
+    // Vehicle readiness requires actual engine and name lookup, not table selection.
+    identity_seen=0;
+    u16 vehicle_count=0;int vehicle_more=0;
+    if(identity_children(20,13,&vehicle_count,0,&vehicle_more)!=info_copy || identity_seen)result|=1;
+    if(info_value(2,8,&vehicle_count,0,&vehicle_more)!=&engine || identity_seen!=1)result|=1;
+    if(info_value(6,10,&vehicle_count,0,&vehicle_more)!=display_name || identity_seen!=5)result|=1;
     // Exercise OEM tables that already contain theme IDs; preserve other
     // entries, replace only those owned by the selected format.
     stock_wireless[2]=parameter(5,12);stock_wireless[3]=parameter(6,10);
