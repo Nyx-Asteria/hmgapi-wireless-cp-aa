@@ -214,6 +214,10 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStat
     if(which==0)return (int)__atomic_load_n(&start_offers,__ATOMIC_ACQUIRE);
     if(which==1)return (int)__atomic_load_n(&start_sends,__ATOMIC_ACQUIRE);
     if(which==2)return __atomic_load_n(&start_last,__ATOMIC_ACQUIRE);
+    if(which==3)return (int)__atomic_load_n(&start_no_payload,__ATOMIC_ACQUIRE);
+    if(which==4)return (int)__atomic_load_n(&start_alloc_failed,__ATOMIC_ACQUIRE);
+    if(which==5)return (int)__atomic_load_n(&start_stale,__ATOMIC_ACQUIRE);
+    if(which==6)return (int)__atomic_load_n(&start_lock_failed,__ATOMIC_ACQUIRE);
     return -1;
 }
 void __aeabi_memclr(void *dest,u32 n){volatile unsigned char *p=dest;while(n--)*p++=0;}

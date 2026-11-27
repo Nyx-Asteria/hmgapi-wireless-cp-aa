@@ -101,7 +101,9 @@ int test_main(void){
     start_len=6;start_msg[0]=0x40;
     u32 before=start_sends;
     start_notify(1,2,0,0);
-    if(fixture_destroyed!=1 || fixture_malloc_calls || start_sends!=before || start_last!=-4)result|=1;
+    if(fixture_destroyed!=1 || fixture_malloc_calls || start_sends!=before || start_last!=-4 || start_stale!=1)result|=1;
+    start_notify(1,2,0,0);
+    if(start_no_payload!=1 || start_sends!=before || start_last!=-1)result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";
