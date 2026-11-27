@@ -457,7 +457,6 @@
       "dipo.session_listener.session_details": "observe",
       "dipo.iap2.bt_address": "change",
       "dipo.bt.set_carplay_bt_address": "replace",
-      "framework.activity.start_activity_for_result": "change",
       "iap2.service.receive_connect": "observe"
     },
     "native": {
