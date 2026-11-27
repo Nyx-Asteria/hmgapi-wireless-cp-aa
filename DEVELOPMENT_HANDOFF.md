@@ -174,6 +174,9 @@ Parent fbb018e680a10f2824ce37d64175724496494d97. Directly opened both uploaded f
 ## Independent FileTransfer cycle — receiver ELF dispatch boundary
 Parent cb21017554fcb6142709d6fd25224082f47dfea1. Actual readelf dependency/symbol inspection of six libraries and targeted ODEX string search from 1409 CPUL capture. Identified AirPlayReceiverSessionSetup/Control/PlatformControl/SendCommand/SendiAPMessage and TccCarPlayCBSession_OnControl as concrete next disassembly targets. No named file channel exports found; absence not established. Primary checkpoint unchanged; transport identification 55% estimate, protocol research 45%, all experimental implementations 0%. Prior CI [{"status":"in_progress","conclusion":null,"url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46069634303"}]. No CPUL changes or release.
 
+## Independent FileTransfer cycle — receiver SETUP dispatch verification
+Parent 219e88db53a2a2ef6aea1aab42a42820ad94438f. Re-extracted actual 1409 receiver and independently disassembled SETUP switch. Explicit cases 100/101/102/110; other values reach common skip/log path in this switch. No mapping from phone file channel to these numbers established. Transport research 60% estimate, protocol research 45%, runtime experiments 0%. Primary identity checkpoint remains 100%; previous CI [{"status":"in_progress","conclusion":null,"url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46069748770"}]. No CPUL edits or release.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
