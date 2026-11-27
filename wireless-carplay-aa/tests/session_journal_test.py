@@ -19,7 +19,7 @@ public Object getLooper(){return this;} }""",
 import java.util.ArrayDeque;
 public class Handler { static final ArrayDeque<Runnable> queue=new ArrayDeque<>();
 public Handler(Object l){} public boolean post(Runnable r){queue.add(r);return true;}
-public static void drain(){while(!queue.isEmpty())queue.remove().run();} }""",
+public static int pending(){return queue.size();} public static void drain(){while(!queue.isEmpty())queue.remove().run();} }""",
         "android/os/SystemClock.java": """package android.os;
 public class SystemClock { public static long time=100; public static long elapsedRealtime(){return time;} }""",
         "CarPlayLog.java": """package hmgapi.mods.wireless.dipo; public class CarPlayLog { static boolean on=true; }""",
@@ -115,6 +115,20 @@ public class JournalTest {
   count=0;for(File f:failDir.listFiles())if(f.isFile()&&f.getName().endsWith(".active"))count++;
   check(count==13,"live session has independent slot");
   retained.end("done");Handler.drain();
+  File burstDir=new File(root,"burst");
+  SessionJournal burst=new SessionJournal(new Context(root),"burst");Handler.drain();
+  for(int k=0;k<1000;k++){burst.beginAttempt("burst "+k);burst.end("end");}
+  check(Handler.pending()<=32,"lifecycle backlog bounded");
+  Handler.drain();
+  burst.beginAttempt("after backlog");burst.record("fresh event");burst.end("done");Handler.drain();
+  boolean recovered=false;
+  for(File f:burstDir.listFiles())if(f.getName().endsWith(".log")){
+   String content=read(f);
+   if(content.contains("START after backlog")){
+    check(content.contains("fresh event")&&content.contains("END done")&&content.contains("skipped sessions due to lifecycle backlog="),"backlog recovery and summary");recovered=true;
+   }
+  }
+  check(recovered,"new session accepted after backlog");
   System.out.println("Session journal recovery, redaction, timestamps, queue and write failure passed");
  }
 }""",

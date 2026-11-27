@@ -13,10 +13,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Bounded private session journal. All disk work runs off projection callbacks. */
 final class SessionJournal {
     private static final long LIMIT = 2L * 1024 * 1024;
-    private static final int KEEP = 12, QUEUE = 256;
+    private static final int KEEP = 12, QUEUE = 256, LIFECYCLE = 32;
     private final Handler worker;
     private final File dir;
     private final AtomicInteger queued = new AtomicInteger();
+    private final AtomicInteger lifecycle = new AtomicInteger();
+    private int skippedSessions;
     // Each accepted generation owns its own drop counter, even while old work drains.
     private AtomicInteger dropped;
     private File active;
@@ -44,10 +46,16 @@ final class SessionJournal {
 
     synchronized void start(final String detail) {
         if (accepting) return;
+        // Reserve a slot for the matching end; never strand an admitted start.
+        if (lifecycle.get() >= LIFECYCLE - 1) {
+            if (skippedSessions < Integer.MAX_VALUE) skippedSessions++;
+            return;
+        }
         accepting = true;
         dropped = new AtomicInteger();
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
-        post(new Runnable() { public void run() {
+        final int skipped = skippedSessions;
+        if (!postLifecycle(new Runnable() { public void run() {
             active = null;
             if (!dir.isDirectory() && !dir.mkdirs()) return;
             recoverInterrupted();
@@ -55,11 +63,13 @@ final class SessionJournal {
             active = new File(dir, "session-" + wall + "-" + UUID.randomUUID().toString() + ".active");
             header = row("START " + bounded(detail), wall, elapsed);
             writeFailed = !append(active, header, true);
+            if (skipped != 0) write(row("LOGGER skipped sessions due to lifecycle backlog=" + skipped));
             if (!writeFailed && CarPlayLog.on) {
                 File marker = new File(dir, active.getName().replace(".active", ".native-enabled"));
                 append(marker, "enabled\n".replace("\n", ""), false);
             }
-        }});
+        }})) { accepting = false; dropped = null; }
+        else skippedSessions = 0;
     }
 
     synchronized void record(String message) {
@@ -84,7 +94,7 @@ final class SessionJournal {
         dropped = null;
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
         final String raw = bounded("END " + reason);
-        post(new Runnable() { public void run() {
+        postLifecycle(new Runnable() { public void run() {
             if (active == null) return;
             // Stop native capture even when journal finalization fails.
             retireMarker(active);
@@ -105,6 +115,15 @@ final class SessionJournal {
             active = null;
             prune();
         }});
+    }
+
+    private boolean postLifecycle(final Runnable task) {
+        lifecycle.incrementAndGet();
+        if (post(new Runnable() { public void run() {
+            try { task.run(); } finally { lifecycle.decrementAndGet(); }
+        }})) return true;
+        lifecycle.decrementAndGet();
+        return false;
     }
 
     // Filesystem permission failures must not kill the journal HandlerThread.
