@@ -51,6 +51,12 @@ static int mutex(void *p){(void)p;return 0;}
 static int protect_fail;
 static int protect(void *p,u32 n,int flags){(void)p;(void)n;(void)flags;return protect_fail;}
 static int mutex_fail(void *p){(void)p;return 1;}
+static u32 fixture_fallback_calls;
+static u32 fallback_build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 count,const char *name,Lookup lookup){
+    (void)h;(void)s;(void)a;(void)b;(void)name;
+    if(cmd==0x1d01 && table==root_table && count==24 && lookup==root_lookup)fixture_fallback_calls++;
+    return 23;
+}
 static u32 fixture_packet[3],fixture_destroyed,fixture_malloc_calls;
 static unsigned char fixture_payload[START_MAX];
 static u32 fixture_payload_destroyed,fixture_sent;
@@ -271,6 +277,10 @@ int test_main(void){
        || start_sends!=before+2 || start_last!=1)result|=1;
     if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,7)!=1
        || Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,8)!=1)result|=1;
+    // A busy or failed identity lock cannot prevent stock identification.
+    raw_builder=fallback_build;lock_mutex=mutex_fail;
+    if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)result|=1;
+    raw_builder=build;lock_mutex=mutex;
     // Shutdown must report native failures and be safe to retry.
     lock_mutex=mutex_fail;
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-15 || configured || identity_built)result|=1;

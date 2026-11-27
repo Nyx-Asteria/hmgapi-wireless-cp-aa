@@ -106,7 +106,7 @@ static Param parameter(u16 id,u16 type){Param p={1,id,type,0,0,0,0,0};return p;}
 static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void *table,u32 count,const char *name,Lookup lookup){
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE) || command!=0x1d01 || table!=root_table || count!=24)
         return raw_builder(handle,session,a,b,command,table,count,name,lookup);
-    if(lock_mutex(&identity_mutex))return 0;
+    if(lock_mutex(&identity_mutex))return raw_builder(handle,session,a,b,command,table,count,name,lookup);
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){unlock_mutex(&identity_mutex);return raw_builder(handle,session,a,b,command,table,count,name,lookup);}
     identity_seen=0;theme_children_active=0;start_capability_seen=0;
     stock_children=0;stock_wireless_lookup=0;build_lookup=lookup;
@@ -125,7 +125,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
     u32 required=(has_vehicle?5:0)|(has_theme?2:0);
     if(result)__atomic_store_n(&identity_evidence,identity_seen,__ATOMIC_RELEASE);
     else __atomic_store_n(&identity_evidence,0,__ATOMIC_RELEASE);
-    if(result && required && (identity_seen&required)==required)
+    if(result && required && (identity_seen&required)==required && __atomic_load_n(&configured,__ATOMIC_ACQUIRE))
         __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
     build_lookup=0;stock_wireless_lookup=0;
     unlock_mutex(&identity_mutex);return result;
@@ -184,7 +184,7 @@ static int theme_tuple_ok(const char *s,u32 n){
     return i>begin && i-begin<=24;
 }
 static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len,int legacy){
-    if(!hook_mailbox){int rc=bind();if(rc)return rc;}
+    if(!hook_mailbox){int rc=bind();if(rc){hook_mailbox=0;return rc;}}
     int vehicle=len!=0,themed=theme_len!=0;
     if(!vehicle && !themed)return -12;
     int ev=vehicle && engine_type==2;
