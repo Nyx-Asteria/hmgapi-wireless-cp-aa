@@ -47,6 +47,10 @@ public final class IdentityRegistryHarness {
         registry.registerTheme("fixture.theme",new CarPlayIdentification.ThemeIdentity("THEME1",985,"19.0"));
         check(!registry.report(before.generation,CarPlayIdentification.Readiness.ADVERTISED,"stale"),"stale generation rejected");
         check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.REGISTERED,"new contribution invalidates armed state");
+        IdentityRegistry.Snapshot snapshot=registry.snapshot();
+        check(snapshot.generation==registry.identityStatus().generation && snapshot.vehicle!=null && snapshot.theme!=null,"atomic snapshot");
+        registry.removeTheme("fixture.theme");
+        check(snapshot.theme!=null && snapshot.generation!=registry.identityStatus().generation,"old snapshot remains distinct");
         System.out.println("PASS mock mods compose independent vehicle and theme contributions");
     }
 

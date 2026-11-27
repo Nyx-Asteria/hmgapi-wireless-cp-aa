@@ -18,6 +18,21 @@ final class IdentityRegistry implements CarPlayIdentification {
 
     @Override public synchronized IdentityStatus identityStatus() { return status; }
 
+    static final class Snapshot {
+        final long generation;
+        final VehicleIdentity vehicle;
+        final ThemeIdentity theme;
+        final boolean start;
+        Snapshot(long generation, VehicleIdentity vehicle, ThemeIdentity theme, boolean start) {
+            this.generation=generation; this.vehicle=vehicle; this.theme=theme; this.start=start;
+        }
+    }
+    synchronized Snapshot snapshot() {
+        VehicleIdentity v=vehicle();
+        if(v!=null) v=new VehicleIdentity(v.displayName,v.engineType,v.connectors);
+        return new Snapshot(generation,v,theme(),themeSessionStart());
+    }
+
     private void invalidate() {
         generation++;
         status=new IdentityStatus(generation,vehicles.isEmpty() && themes.isEmpty()
@@ -40,7 +55,7 @@ final class IdentityRegistry implements CarPlayIdentification {
         synchronized (this) {
             if (!vehicles.isEmpty() && !vehicles.containsKey(modId))
                 throw new IllegalStateException("CarPlay vehicle identity already belongs to " + vehicles.keySet());
-            vehicles.put(modId, vehicle); invalidate(); notify = changed;
+            vehicles.put(modId, new VehicleIdentity(vehicle.displayName,vehicle.engineType,vehicle.connectors)); invalidate(); notify = changed;
         }
         if (notify != null) notify.run();
     }

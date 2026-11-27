@@ -10,6 +10,7 @@ import hmgapi.mods.wireless.api.CarPlayIdentification;
 final class IdentityInstaller {
     private IdentityInstaller() {}
     private static boolean loaded, armed;
+    private static long armedGeneration=-1;
     private static byte[] lastStart;
     private static String lastStartNotice = "";
     private static boolean watcherStarted;
@@ -76,9 +77,15 @@ final class IdentityInstaller {
     }
 
     private static synchronized void apply(ModContext mod, LoadedApp app, IdentityRegistry registry) {
-        CarPlayIdentification.VehicleIdentity vehicle = registry.vehicle();
-        CarPlayIdentification.ThemeIdentity theme = registry.theme();
-        if (vehicle == null && theme == null) { if (loaded) NativeIdentity.shutdown(); lastStart = null; armed = false; return; }
+        IdentityRegistry.Snapshot snapshot=registry.snapshot();
+        CarPlayIdentification.VehicleIdentity vehicle=snapshot.vehicle;
+        CarPlayIdentification.ThemeIdentity theme=snapshot.theme;
+        if(armed && armedGeneration==snapshot.generation) { refreshStart(mod,app,registry); return; }
+        armed=false; armedGeneration=-1;
+        try {
+        if(loaded) NativeIdentity.shutdown();
+        lastStart=null;
+        if(vehicle==null && theme==null) return;
         int dcType = -1, dcPower = 0, acType = -1, acPower = 0;
         if (vehicle != null) {
             for (CarPlayIdentification.Connector connector : vehicle.connectors) {
@@ -97,13 +104,16 @@ final class IdentityInstaller {
         try {
             byte[] name = vehicle == null ? new byte[0] : vehicle.displayName.getBytes("UTF-8");
             byte[] themeId = theme == null ? new byte[0] : theme.encoded().getBytes("US-ASCII");
-            // Changing identity invalidates the cached session-start payload.
-            clearStart();
-            armed = false;
+            if(!registry.report(snapshot.generation,CarPlayIdentification.Readiness.PREPARED,"validated native inputs")) return;
             int rc = NativeIdentity.configure(name, vehicle == null ? -1 : vehicle.engineType,
                     dcType, dcPower, acType, acPower, themeId, true); // RC6 verified full-tuple identity format
             if (rc != 0) throw new NativeFailure(rc);
+            if(!registry.report(snapshot.generation,CarPlayIdentification.Readiness.ARMED,"native configure succeeded")) {
+                NativeIdentity.shutdown(); return;
+            }
             armed = true;
+            armedGeneration=snapshot.generation;
+            mod.log("CarPlay identity: generation="+armedGeneration+" armed");
             if (theme != null) {
                 mod.log("CarPlay theme: configured to report as " + theme.encoded()
                         + " (legacy parameters 5/6; verified K5 format)");
@@ -111,6 +121,13 @@ final class IdentityInstaller {
             refreshStart(mod, app, registry);
         } catch (java.io.UnsupportedEncodingException impossible) {
             throw new AssertionError(impossible);
+        }
+        } catch(Throwable error) {
+            armed=false; armedGeneration=-1; lastStart=null;
+            if(loaded) try { NativeIdentity.shutdown(); } catch(Throwable ignored) {}
+            registry.report(snapshot.generation,CarPlayIdentification.Readiness.FAILED,
+                    error instanceof NativeFailure ? "native configure="+((NativeFailure)error).code : error.getClass().getSimpleName());
+            throw error;
         }
     }
 
@@ -128,8 +145,10 @@ final class IdentityInstaller {
 
     private static synchronized void refreshStart(ModContext mod, LoadedApp app, IdentityRegistry registry) {
         if (!loaded || !armed) return;
-        CarPlayIdentification.ThemeIdentity theme = registry.theme();
-        if (!mod.enabled() || !mod.settingBoolean("bridge", true) || theme == null || !registry.themeSessionStart()) {
+        IdentityRegistry.Snapshot snapshot=registry.snapshot();
+        if(snapshot.generation!=armedGeneration) { clearStart(); return; }
+        CarPlayIdentification.ThemeIdentity theme = snapshot.theme;
+        if (!mod.enabled() || !mod.settingBoolean("bridge", true) || theme == null || !snapshot.start) {
             if (lastStart != null) clearStart();
             notice(mod, "extension not requested");
             return;
