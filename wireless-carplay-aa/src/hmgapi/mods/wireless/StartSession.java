@@ -68,7 +68,8 @@ final class StartSession {
                 int n=f.getInt(config);if(n>0&&n<=255)return n;
             }
         }catch(Throwable ignored){}
-        return 0;
+        // Unknown is not a measured channel. The codec omits negative values.
+        return -1;
     }
     private static List<String> addresses(String name){
         List<String> out=new ArrayList<String>();
