@@ -199,6 +199,14 @@ final class CpTx {
         return w.len + " bytes, thread " + w.thread.getName() + " tid " + w.tid + ", " + w.q.size() + " queued behind it";
     }
 
+    /** Process-lifetime counters, plus live link state before reset. */
+    synchronized String diagnosticSnapshot() {
+        return "txSentTotal=" + sent + " txFailedTotal=" + failed
+                + " txOverflowTotal=" + overflow + " txQueued=" + queued()
+                + " txBlockedMs=" + blockedMs() + " txAbandoned=" + stuck
+                + " txGeneration=" + gen;
+    }
+
     synchronized int threadNumber() {
         return cur == null ? 0 : cur.n;
     }
