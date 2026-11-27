@@ -135,6 +135,30 @@ public final class SessionExporterTest {
             put(mounts, "33 20 8:1 / " + usb.getCanonicalPath() + " rw - vfat /dev/block/sda1 rw\n");
             SessionExporter.exportOne(interrupted, dest, new SessionExporter.MountGuard(usb, mounts));
             check(!interruptedPart.exists() && Arrays.equals(SessionExporter.digest(interrupted), SessionExporter.digest(interruptedTarget)), "recovery after mid-copy removal");
+            final File durable = new File(spool, "session-006.log");
+            put(durable, "directory sync fixture");
+            final File durableTarget = new File(dest, durable.getName());
+            final File durableMarker = new File(dest, durable.getName()+".complete");
+            final java.util.List<String> flushes = new java.util.ArrayList<String>();
+            SessionExporter.DirectorySync original = SessionExporter.directorySync;
+            try {
+                SessionExporter.directorySync = new SessionExporter.DirectorySync() {
+                    public void flush(File dir) throws Exception {
+                        check(dir.equals(dest), "sync destination directory");
+                        check(durableTarget.isFile(), "payload published before sync");
+                        flushes.add(durableMarker.exists() ? "marker" : "payload");
+                    }
+                };
+                SessionExporter.exportOne(durable, dest);
+                check(flushes.equals(Arrays.asList("payload","marker")), "ordered directory sync boundaries");
+                SessionExporter.directorySync = new SessionExporter.DirectorySync() {
+                    public void flush(File dir) throws Exception { throw new IOException("unsupported fsync"); }
+                };
+                File fallback = new File(spool, "session-007.log");
+                put(fallback, "fallback");
+                SessionExporter.exportOne(fallback, dest);
+                check(new File(dest, fallback.getName()+".complete").isFile() && fallback.isFile(), "unsupported directory sync preserves verified export and source");
+            } finally { SessionExporter.directorySync = original; }
             System.out.println("Java session export tests passed");
         } finally { remove(root); }
     }

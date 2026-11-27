@@ -11,6 +11,39 @@ public final class SessionExporter {
         "/mnt/media_rw/usb0", "/mnt/media_rw/usb1", "/mnt/media_rw/usb2"
     };
     private static final long MAX_BYTES = 4L * 1024 * 1024;
+    interface DirectorySync { void flush(File dir) throws Exception; }
+    // Android API 19 does not expose android.system.Os as a public SDK API.
+    // Resolve the platform implementation at runtime; an unavailable or refusing
+    // filesystem is a best-effort durability limitation, not a reason to lose logs.
+    static DirectorySync directorySync = new DirectorySync() {
+        public void flush(File dir) throws Exception {
+            Class<?> libcore = Class.forName("libcore.io.Libcore");
+            Class<?> osType = Class.forName("libcore.io.Os");
+            Class<?> constants = Class.forName("libcore.io.OsConstants");
+            Object os = libcore.getField("os").get(null);
+            int flags = constants.getField("O_RDONLY").getInt(null)
+                    | constants.getField("O_DIRECTORY").getInt(null);
+            FileDescriptor fd = (FileDescriptor) osType.getMethod("open", String.class, int.class, int.class)
+                    .invoke(os, dir.getAbsolutePath(), flags, 0);
+            try {
+                osType.getMethod("fsync", FileDescriptor.class).invoke(os, fd);
+            } finally {
+                osType.getMethod("close", FileDescriptor.class).invoke(os, fd);
+            }
+        }
+    };
+    private static boolean syncWarning;
+    private static void flushDirectory(File dir, Guard guard) throws IOException {
+        guard.check();
+        try { directorySync.flush(dir); }
+        catch (Exception | LinkageError failure) {
+            if (!syncWarning) {
+                System.err.println("Session export: directory sync unavailable; abrupt power-loss durability not guaranteed");
+                syncWarning = true;
+            }
+        }
+        guard.check();
+    }
 
     public static void main(String[] args) throws InterruptedException {
         if (args.length != 1 || !("wcp".equals(args[0]) || "stbt".equals(args[0])))
@@ -199,6 +232,7 @@ public final class SessionExporter {
             guard.check();
             if (target.exists() || !part.renameTo(target)) throw new IOException("cannot publish journal");
             published = true;
+            flushDirectory(dest, guard);
             complete(target, expected, guard, false);
             System.out.println("Verified export: " + target.getName());
         } finally {
@@ -226,6 +260,7 @@ public final class SessionExporter {
             guard.check();
             if (!marker.renameTo(invalid)) throw new IOException("cannot retire stale marker");
         }
+        flushDirectory(dest, guard);
     }
 
     private static byte[] manifestBytes(String name, long length, byte[] hash) throws UnsupportedEncodingException {
@@ -266,6 +301,7 @@ public final class SessionExporter {
             guard.check();
             if (marker.exists() || !part.renameTo(marker)) throw new IOException("cannot publish completion marker");
             published = true;
+            flushDirectory(dest, guard);
         } finally {
             if (!published) {
                 try { guard.check(); part.delete(); } catch (IOException ignored) {}
