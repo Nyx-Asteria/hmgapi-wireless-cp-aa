@@ -42,7 +42,8 @@ final class StartSession {
             else if(line.startsWith("deviceID="))deviceId=line.substring(9);
             else if(line.startsWith("sourceVersion="))sourceVersion=line.substring(14);
         }
-        if(!valid(pi)||!valid(deviceId)||!valid(sourceVersion))return blocked(Blocker.RECEIVER_IDENTITY);
+        if(!valid(pi)||!valid(deviceId))return blocked(Blocker.RECEIVER_IDENTITY);
+        if(!valid(sourceVersion))sourceVersion=null; // optional; never fabricate a receiver version
         Object config;
         try{
             Object wm=context.getSystemService("wifi");
@@ -55,7 +56,7 @@ final class StartSession {
         if(!valid(psk))psk=unquote(field(config,"preSharedKey"));
         if(!valid(ssid)||!valid(psk))return blocked(Blocker.WIFI_CREDENTIALS);
         List<String> ips=addresses("wlan0");
-        if(ips.isEmpty())return blocked(Blocker.NETWORK_ADDRESS);
+        // Early preparation can precede address assignment. Refresh supplies addresses when available.
         int channel=channel(config);
         return new Preparation(StartSessionCodec.encode(ssid,psk,channel,ips,-1,7000,deviceId,pi,sourceVersion,
                 theme.sdkVersion,theme.assetIdentifier,theme.assetVersion),Blocker.NONE);
