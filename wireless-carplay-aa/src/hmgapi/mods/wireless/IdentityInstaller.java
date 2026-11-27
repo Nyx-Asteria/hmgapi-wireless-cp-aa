@@ -92,7 +92,7 @@ final class IdentityInstaller {
         if(armed && armedGeneration==snapshot.generation) { refreshStart(mod,app,registry); return; }
         armed=false; armedGeneration=-1;
         try {
-        if(loaded) NativeIdentity.shutdown();
+        if(loaded){shutdownPending=true;if(!finishShutdown(mod))throw new IllegalStateException("native shutdown pending");}
         lastStart=null;
         withdrawal.setPending(loaded);
         if(vehicle==null && theme==null){resumeRecovery.stop();return;}
@@ -119,7 +119,7 @@ final class IdentityInstaller {
                     dcType, dcPower, acType, acPower, themeId, true); // RC6 verified full-tuple identity format
             if (rc != 0) throw new NativeFailure(rc);
             if(!registry.report(snapshot.generation,CarPlayIdentification.Readiness.ARMED,"native configure succeeded")) {
-                NativeIdentity.shutdown(); return;
+                shutdownPending=true;finishShutdown(mod);return;
             }
             withdrawal.setPending(false); // successful native configure clears its payload
             armed = true;
@@ -161,7 +161,8 @@ final class IdentityInstaller {
 
     private static boolean finishShutdown(ModContext mod){
         try {
-            NativeIdentity.shutdown();
+            int rc=NativeIdentity.shutdown();
+            if(rc!=0){notice(mod,"native shutdown pending ("+rc+")");return false;}
             shutdownPending=false;
             return true;
         }catch(Throwable error){

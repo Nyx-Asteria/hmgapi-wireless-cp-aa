@@ -48,7 +48,9 @@ static u32 build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 count,const cha
     (void)h;(void)s;(void)a;(void)b;(void)cmd;(void)name;at=0;output[slot][0]=0;walk(table,count,lookup,0);return 1;
 }
 static int mutex(void *p){(void)p;return 0;}
-static int protect(void *p,u32 n,int flags){(void)p;(void)n;(void)flags;return 0;}
+static int protect_fail;
+static int protect(void *p,u32 n,int flags){(void)p;(void)n;(void)flags;return protect_fail;}
+static int mutex_fail(void *p){(void)p;return 1;}
 static u32 fixture_packet[3],fixture_destroyed,fixture_malloc_calls;
 static unsigned char fixture_payload[START_MAX];
 static u32 fixture_payload_destroyed,fixture_sent;
@@ -256,6 +258,13 @@ int test_main(void){
     start_notify(1,2,0,0);
     if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=2
        || start_sends!=before+2 || start_last!=1)result|=1;
+    // Shutdown must report native failures and be safe to retry.
+    lock_mutex=mutex_fail;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-15 || configured || identity_built)result|=1;
+    lock_mutex=mutex;protect_fail=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-19 || start_len)result|=1;
+    protect_fail=0;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=0 || mailbox || start_len)result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";

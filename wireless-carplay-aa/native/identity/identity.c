@@ -225,10 +225,16 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_configure(JNIEnv
     if((*env)->ExceptionCheck(env))return -12;
     return configure(bytes,(u32)n,engine_type,dc_type,(u32)dc,ac_type,(u32)ac,theme_bytes,(u32)t,legacy);
 }
-JNIEXPORT void JNICALL Java_hmgapi_mods_wireless_NativeIdentity_shutdown(JNIEnv *env,jclass cls){
+JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_shutdown(JNIEnv *env,jclass cls){
     (void)env;(void)cls;__atomic_store_n(&configured,0,__ATOMIC_RELEASE);
-    if(lock_mutex && unlock_mutex && !lock_mutex(&identity_mutex)){start_clear_locked();unlock_mutex(&identity_mutex);}
-    if(hook_mailbox)set_handler(0);
+    __atomic_store_n(&identity_built,0,__ATOMIC_RELEASE);
+    if(!hook_mailbox)return 0; // No gate has been bound.
+    if(!lock_mutex || !unlock_mutex)return -18;
+    if(lock_mutex(&identity_mutex))return -15;
+    start_clear_locked();
+    int rc=set_handler(0);
+    unlock_mutex(&identity_mutex);
+    return rc;
 }
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSession(JNIEnv *env,jclass cls,jbyteArray message){
     (void)cls;
