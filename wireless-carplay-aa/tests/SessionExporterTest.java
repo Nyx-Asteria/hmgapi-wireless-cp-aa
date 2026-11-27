@@ -24,7 +24,7 @@ public final class SessionExporterTest {
             File mounts = new File(root, "mounts");
             put(mounts, "");
             check(!SessionExporter.mounted(usb, mounts), "unmounted");
-            put(mounts, "device " + usb.getCanonicalPath() + " vfat rw 0 0\n");
+            put(mounts, "31 20 8:1 / " + usb.getCanonicalPath() + " rw - vfat /dev/block/sda1 rw\n");
             check(SessionExporter.mounted(usb, mounts), "mounted");
             File logs = new File(usb, "LOGS");
             File src = new File(spool, "session-001.log");
@@ -82,12 +82,12 @@ public final class SessionExporterTest {
                 throw new AssertionError("removed mount accepted");
             } catch (IOException expected) {}
             check(!new File(dest, removable.getName()).exists(), "removed mount not written");
-            put(mounts, "other-device " + usb.getCanonicalPath() + " vfat rw 0 0\n");
+            put(mounts, "32 20 8:1 / " + usb.getCanonicalPath() + " rw - vfat /dev/block/sda1 rw\n");
             try {
                 guard.check();
-                throw new AssertionError("replacement mount accepted");
+                throw new AssertionError("same-device remount with new mount ID accepted");
             } catch (IOException expected) {}
-            put(mounts, "device " + usb.getCanonicalPath() + " vfat rw 0 0\n");
+            put(mounts, "31 20 8:1 / " + usb.getCanonicalPath() + " rw - vfat /dev/block/sda1 rw\n");
             SessionExporter.exportOne(removable, dest, new SessionExporter.MountGuard(usb, mounts));
             check(new File(dest, removable.getName()).isFile(), "export resumes on mounted USB");
             File nativeSpool = new File(root, "native");
