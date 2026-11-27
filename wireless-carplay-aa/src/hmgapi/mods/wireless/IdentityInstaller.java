@@ -12,7 +12,7 @@ final class IdentityInstaller {
     private static boolean loaded, armed;
     private static long armedGeneration=-1;
     private static byte[] lastStart;
-    private static boolean startClearPending;
+    private static final StartWithdrawal withdrawal=new StartWithdrawal();
     private static String lastStartNotice = "";
     private static boolean watcherStarted;
 
@@ -88,7 +88,7 @@ final class IdentityInstaller {
         try {
         if(loaded) NativeIdentity.shutdown();
         lastStart=null;
-        startClearPending=loaded;
+        withdrawal.setPending(loaded);
         if(vehicle==null && theme==null) return;
         int dcType = -1, dcPower = 0, acType = -1, acPower = 0;
         if (vehicle != null) {
@@ -115,7 +115,7 @@ final class IdentityInstaller {
             if(!registry.report(snapshot.generation,CarPlayIdentification.Readiness.ARMED,"native configure succeeded")) {
                 NativeIdentity.shutdown(); return;
             }
-            startClearPending=false; // successful native configure clears its payload
+            withdrawal.setPending(false); // successful native configure clears its payload
             armed = true;
             armedGeneration=snapshot.generation;
             mod.log("CarPlay identity: generation="+armedGeneration+" armed");
@@ -128,7 +128,7 @@ final class IdentityInstaller {
             throw new AssertionError(impossible);
         }
         } catch(Throwable error) {
-            armed=false; armedGeneration=-1; lastStart=null; startClearPending=loaded;
+            armed=false; armedGeneration=-1; lastStart=null; withdrawal.setPending(loaded);
             if(loaded) try { NativeIdentity.shutdown(); } catch(Throwable ignored) {}
             registry.report(snapshot.generation,CarPlayIdentification.Readiness.FAILED,
                     error instanceof NativeFailure ? "native configure="+((NativeFailure)error).code : error.getClass().getSimpleName());
@@ -138,12 +138,13 @@ final class IdentityInstaller {
 
     private static boolean clearStart(ModContext mod) {
         lastStart=null;
-        if(!loaded){startClearPending=false;return true;}
-        startClearPending=true;
+        if(!loaded){withdrawal.setPending(false);return true;}
+        withdrawal.setPending(true);
         try {
-            int rc=NativeIdentity.startSession(new byte[0]);
+            int rc=withdrawal.clear(new StartWithdrawal.NativeClear(){
+                @Override public int run(){return NativeIdentity.startSession(new byte[0]);}
+            });
             if(rc!=0){notice(mod,"native withdrawal pending ("+rc+")");return false;}
-            startClearPending=false;
             return true;
         }catch(Throwable error){
             notice(mod,"native withdrawal pending ("+error.getClass().getSimpleName()+")");
@@ -160,7 +161,7 @@ final class IdentityInstaller {
 
     private static synchronized void refreshStart(ModContext mod, LoadedApp app, IdentityRegistry registry) {
         if (!loaded) return;
-        if(startClearPending && !clearStart(mod))return;
+        if(withdrawal.pending() && !clearStart(mod))return;
         if(!armed)return;
         IdentityRegistry.Snapshot snapshot=registry.snapshot();
         if(snapshot.generation!=armedGeneration) { clearStart(mod); return; }
@@ -179,14 +180,14 @@ final class IdentityInstaller {
                 return;
             }
             if (java.util.Arrays.equals(lastStart, msg)) return;
-            startClearPending=true; // failed/throwing native call may leave an older payload
+            withdrawal.setPending(true); // failed/throwing native call may leave an older payload
             int result = NativeIdentity.startSession(msg);
             if (result != 0) {
                 if(!clearStart(mod))return;
                 notice(mod, "native session extension refused (" + result + "); stock startup retained");
                 return;
             }
-            startClearPending=false;
+            withdrawal.setPending(false);
             lastStart = msg;
             notice(mod, "armed 0x4300/0x4301 (" + msg.length + " bytes; contents not logged)");
         } catch (Throwable failure) {
