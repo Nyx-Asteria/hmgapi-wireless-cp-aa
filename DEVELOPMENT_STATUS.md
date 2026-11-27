@@ -31,7 +31,7 @@ Scope: WCP 2.2.1-rc.6 and Standalone TBT 1.0.0-rc.3. HMG-API SDK RC10 pinned to 
 | A-019 | Aggregate RX diagnostics | Host validated |
 | A-020 | Saved integrated TBT=true | Partial; explicitly disable WCP integrated TBT when using STBT |
 | A-021 | Hidden STBT settings | Host validated |
-| A-022 | Removed AA firewall rule | Open; AA behavior not vehicle verified |
+| A-022 | Removed AA firewall rule | Policy documented and historical network regressions reviewed; AA behavior not vehicle verified |
 | A-023 | CPUL identity consumer | Deferred until independent development stabilizes |
 | A-024 | Release regression coverage | Workflow source corrected; actual signed release not executed |
 | A-025 | RC3 changelog | Written in 7b7df0f; final review pending |
