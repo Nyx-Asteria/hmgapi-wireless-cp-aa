@@ -144,8 +144,11 @@ Parent f5d076dc2e4c31110e00b7ce8d92174c6ac80b82. Require exactly one usable call
 ## Previous cycle 8baf42c — reopened firmware and metadata evidence
 Parent efef05fc666dd05f2fb074ae3dfd794196b6e0fc. User supplied original and incremental archives again. Reopened exact ZIP entries, independently verified native library hashes, inspected actual Thumb receive entry and ELF checksum symbols; targeted original metadata scan returned no version/checksum/v2 matches. See docs/filetransfer-v2-research.md for scope. FileTransfer evidence access blocker removed; protocol semantics not yet established. No runtime edits or release. Overall 77% held, research 45% estimate; no CPUL edits.
 
-## Current cycle — incremental iAP2 evidence inventory
+## Previous cycle ea044ee — incremental iAP2 evidence inventory
 Parent 8baf42c1385f653d83b0e9e15b5c146dab7b7918. Successfully enumerated the two newly uploaded incremental archive parts as one tar stream, identified exact AccessoryiAP2Shim binary, metadata and logging resources for targeted inspection. Filename search alone does not prove presence or absence of FTv2. No runtime changes. Overall estimate held at 77%; FileTransfer research 45%. No CPUL edits or releases.
+
+## Current cycle — targeted theme and FileTransfer metadata pass
+Parent ea044eedf4dc9a7b72738901bbe0c2baeb33e95b. Completed actual streaming content scan of the incremental archive within the four-framework scope documented in docs/filetransfer-v2-research.md. Theme librarian lifecycle and distinct iOS/accessory content version metadata are relevant to CPUL theme investigation; no explicit FTv2 version/checksum wire schema identified. User requested a quick pass for lower-priority transfer work. Mark primary identity components implementation-complete (100%) separately from pending CI, firmware callback verification and later integration/vehicle tests. FTv2 experiments remain unimplemented and disabled; do not invent protocol constants. Overall estimate 77% held pending the remaining scope. No CPUL edits or releases.
 
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
