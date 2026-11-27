@@ -36,6 +36,26 @@ public final class SessionExporterTest {
             check(Arrays.equals(SessionExporter.digest(src), SessionExporter.digest(target)), "verified bytes");
             check(!new File(dest, "session-002.active").exists(), "active excluded");
             check(src.exists(), "source retained");
+            File complete = new File(dest, src.getName() + ".complete");
+            check(complete.isFile(), "completion marker published");
+            String manifest = new String(Files.readAllBytes(complete.toPath()), "UTF-8");
+            StringBuilder expectedHash = new StringBuilder();
+            for (byte b : SessionExporter.digest(src)) expectedHash.append(String.format("%02x", b & 255));
+            check(manifest.equals("SHA256 " + expectedHash + "\nBYTES " + src.length() + "\nFILE " + src.getName() + "\n"), "manifest content");
+            check(complete.delete(), "simulate interrupted marker publication");
+            File markerPart = new File(dest, src.getName() + ".complete.part");
+            put(markerPart, "unfinished marker");
+            SessionExporter.exportDirectory(spool, logs, "sessions");
+            check(complete.isFile() && !markerPart.exists(), "completion recovery");
+            put(complete, "conflicting marker");
+            try {
+                SessionExporter.exportDirectory(spool, logs, "sessions");
+                throw new AssertionError("marker conflict accepted");
+            } catch (IOException expected) {}
+            check(new String(Files.readAllBytes(complete.toPath()), "UTF-8").equals("conflicting marker"), "marker conflict retained");
+            check(complete.delete(), "remove marker conflict");
+            SessionExporter.exportDirectory(spool, logs, "sessions");
+
             File part = new File(dest, src.getName() + ".part");
             put(part, "interrupted");
             SessionExporter.exportDirectory(spool, logs, "sessions");
