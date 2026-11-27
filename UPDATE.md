@@ -1,6 +1,6 @@
 # WCP update guide — 2.2.1-rc.6 (development candidate)
 
-Current K5 test baseline: US DL322 260507, HMG-API  >=1.1.0-rc.10 for this candidate. RC6 is not yet published.
+Current K5 test baseline: US DL322 260507, HMG-API >=1.1.0-rc.10 for this candidate. RC6 is not yet published.
 
 ## Update
 - Keep the known-good ZIP and record installed versions. Download the fork's signed package from its [releases](https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/releases).
@@ -15,6 +15,9 @@ Current K5 test baseline: US DL322 260507, HMG-API  >=1.1.0-rc.10 for this candi
 - Automatically open wireless CarPlay remains optional, default ON.
 - Save, apply and restart. Use only one navigation sender. WCP's Now Playing refresh is independent of its TBT setting.
 - Follow [Standalone TBT's update and test guide](https://github.com/Nyx-Asteria/Standalone_TBT/blob/main/UPDATE.md).
+
+## Android Auto compatibility
+The former experimental hotspot TCP 40515 ingress rule for Canadian Ioniq 6 firmware 260206 is no longer installed, even if aa_firewall was previously saved as true. WCP's CarPlay rules remain controlled by Enable wireless CarPlay. Android Auto on vehicles requiring the retired rule has not been validated. Do not interpret the CarPlay validation results as wireless AA validation.
 
 ## Verification and rollback
 Confirm wireless pairing/connect, auto-open, music metadata after track changes, disconnect/reconnect and return to CarPlay. Apple Maps and Google Maps provide navigation positive controls through Standalone TBT. Waze is not yet verified. No changes to WCP's identification payload are proposed without runtime evidence. Aggregate receive and transmit timing diagnostics are included; actual latency improvements require vehicle measurement.

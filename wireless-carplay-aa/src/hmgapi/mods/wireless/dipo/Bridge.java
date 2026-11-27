@@ -244,6 +244,10 @@ final class Bridge {
                     i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                     i.putExtra("component", COMPONENT_BT_CARPLAY);
                     i.putExtra("serial", addr);
+                    if (!currentBtAttach(generation, addr)) {
+                        failBtAttach(generation);
+                        return;
+                    }
                     c.sendBroadcast(i);
                     log("BT_ATTACHED sent for " + addr);
                 } catch (Throwable t) {
