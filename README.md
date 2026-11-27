@@ -4,7 +4,7 @@ Use wireless CarPlay and Android Auto on a compatible Gen5W head unit through th
 car's own Wi-Fi hotspot. The mod also brings experimental phone navigation (turn-by-turn) to the instrument
 cluster and head-up display (HUD) on compatible hardware and firmware.
 
-[Download the mod](https://github.com/Open-HMG/hmgapi-wireless-cp-aa/releases) ·
+[Download the mod](https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/releases) ·
 [Confirmed cars](#confirmed-cars) ·
 [Install and connect](#install-and-connect) ·
 [Get help](#troubleshooting)
@@ -30,10 +30,10 @@ For the full list of model codes and firmware the installer accepts, see
 
 ## Install and connect
 
-1. Install or update HMG-API. Mod version **2.2.0-rc.8** requires **HMG-API
-   1.1.0-rc.6 or newer**. [HMG-API installation guide](https://github.com/Open-HMG/HMG-API/wiki/Installing-HMG-API)
+1. Install or update HMG-API. Fork version **2.2.1-rc.4** requires **HMG-API
+   1.1.0-rc.8 or newer**. [HMG-API installation guide](https://github.com/Open-HMG/HMG-API/wiki/Installing-HMG-API)
 2. Download `wireless-carplay-aa-<version>.zip` and copy it, still zipped, into
-   `HMGAPI/updates/` on a USB stick. [Mod releases](https://github.com/Open-HMG/hmgapi-wireless-cp-aa/releases)
+   `HMGAPI/updates/` on a USB stick. [Mod releases](https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/releases)
 3. Plug in the stick. In HMG-API, select **Check USB updates**, then **Wireless
    CarPlay + Android Auto**. On the main screen, tap **Apply changes**. Restart the
    head unit if prompted.
@@ -100,3 +100,7 @@ CarPlay identification API. [Contributor guide](CONTRIBUTING.md)
 ## K5 test fork — 2.2.1-rc.1
 
 Restores direct OEM hotspot startup while retaining upstream navigation fixes and removal of projection arbitration. Optional CPUL theme session-start extension is prepared before Bluetooth iAP2 component 4 connects. Requires verified K5 firmware and receiver metadata; no competing iAP2 patch. Experimental, native dispatch and connection behavior not hardware-verified. Do not replace a working package without a rollback copy.
+
+## Current K5 fork — 2.2.1-rc.4
+
+The US K5 wireless connection, aggressive reconnection and automatic opening have been reported working on firmware 260507. Initial connection latency remains an open issue. For use with Standalone TBT, disable WCP's **Turn-by-turn on the cluster and HUD** (rebuild), retain the wireless bridge and Now Playing, apply changes and restart. See [update guide](UPDATE.md). No new transport or identification patches were made during the Standalone TBT Waze investigation.
