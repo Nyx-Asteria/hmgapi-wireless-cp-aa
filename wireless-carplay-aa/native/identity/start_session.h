@@ -67,11 +67,14 @@ static void start_bind(void *lib){
     handlers=dlsym(lib,"iAP2CtlHandleMsgFuncList");
 }
 static int start_configure(const unsigned char *msg,u32 len){
-    if(len>START_MAX || (len && (len<6 || msg[0]!=0x40 || msg[1]!=0x40
-       || ((u32)msg[2]<<8|msg[3])!=len || msg[4]!=0x43 || msg[5]!=0x01)))return -12;
     if(!lock_mutex || !unlock_mutex)return len?-18:0;
     if(lock_mutex(&identity_mutex))return -15;
+    // A rejected replacement must not leave a previous session payload armed.
     start_clear_locked();
+    if(len>START_MAX || (len && (!msg || len<6 || msg[0]!=0x40 || msg[1]!=0x40
+       || ((u32)msg[2]<<8|msg[3])!=len || msg[4]!=0x43 || msg[5]!=0x01))){
+        unlock_mutex(&identity_mutex);return -12;
+    }
     if(!len){unlock_mutex(&identity_mutex);return 0;}
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE) || !has_theme || !handlers
        || !packet_create || !packet_destroy || !session_malloc || !send_packet || !root_table){

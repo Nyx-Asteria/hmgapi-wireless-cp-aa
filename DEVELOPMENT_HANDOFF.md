@@ -6,12 +6,15 @@ Update this file in every development commit, together with the code; preserve t
 WCP parent fcf00a245edb0168ff74780234b4d142edbe83f5 (CI passed: https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46055754533).
 STBT checkpoint 6233b8f3582966b15c35926630a370cff2442082 (snapshot publication/interrupted USB recovery tests; CI not checked here).
 Logging complete off-car per prior tracker, preserve persistent session-end USB exports, categorized diagnostics, SHA-256 fallback, recovery, bounded retention.
-Shared identity 55% carried forward from last chat: vehicle/K5 profile 90% last visible, shared API/CPUL readiness 85%, StartSession 30%, theme identity 50%, FileTransfer v2 0%, diagnostics/validation 60%. Estimates, not test coverage. Integration/audit, final consolidation and signed publication 0%.
+Shared identity 55% carried forward from last chat: vehicle/K5 profile 90% last visible, shared API/CPUL readiness 85%, StartSession 40%, theme identity 50%, FileTransfer v2 0%, diagnostics/validation 60%. Estimates, not test coverage. Integration/audit, final consolidation and signed publication 0%.
 API v3 native construction evidence is present; advertisement means builder evidence, not phone acceptance. Reconfiguration invalidates evidence.
 
-## Current WCP change
+## Current WCP change (previous cycle c134bf2)
 Separate Bluetooth pre-connect session preparation from optional stock vehicle group activation. Remove unconditional success log; refreshStart already reports actual outcome without logging payload. CI for this change pending; no vehicle validation. Do not inflate progress before review.
-Next: inspect native StartSession offer/answer lifecycle, stale payload invalidation and prerequisite handling; finish readiness contract and theme tuple tests; independent opt-in firmware-gated FileTransfer v2 experiments.
+Next: finish native offer/answer lifecycle and prerequisite handling; finish readiness contract and theme tuple tests; independent opt-in firmware-gated FileTransfer v2 experiments.
+
+## Current cycle — native replacement invalidation
+Malformed native StartSession replacement now clears the existing payload under the identity mutex before returning -12. ARM production-source harness checks malformed header, null payload and explicit clear, including buffer erasure. CI pending; prior cycle CI was in progress when inspected. StartSession 40% implementation estimate, shared identity stays 55% pending validation. Remaining limitation: JNI rejects oversize arrays before start_configure and in-flight native sends are not yet generation-bound; review separately. No vehicle testing or release.
 
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.

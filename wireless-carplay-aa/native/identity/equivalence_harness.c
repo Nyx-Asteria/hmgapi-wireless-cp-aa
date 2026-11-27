@@ -71,6 +71,15 @@ int test_main(void){
     result|=configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=5;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     if(configure("Kia K5",6,0,0,235000,2,10900,"",0,0)!=-12)result|=1;
+    /* Rejecting malformed replacements must erase the old native payload. */
+    static const unsigned char invalid[]={0x40,0x40,0,6,0x43,0};
+    start_len=6;for(u32 i=0;i<6;i++)start_msg[i]=0x55;
+    if(start_configure(invalid,sizeof(invalid))!=-12 || start_len)result|=1;
+    for(u32 i=0;i<START_MAX;i++)if(start_msg[i])result|=1;
+    start_len=6;start_msg[0]=0x55;
+    if(start_configure(0,6)!=-12 || start_len || start_msg[0])result|=1;
+    start_len=6;start_msg[0]=0x55;
+    if(start_configure(0,0)!=0 || start_len || start_msg[0])result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";
