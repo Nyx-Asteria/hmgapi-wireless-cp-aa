@@ -193,23 +193,9 @@ final class SessionLogWriter {
         if(s.startsWith("WARN "))warningCount++;
         if(s.startsWith("ERROR "))errorCount++;
         String key=null;
-        if(s.contains("[theme-sync] negotiated traffic panels="))key="theme_panels";
-        else if(s.contains("[theme-sync] first message for Center_Display"))key="center_negotiated";
-        else if(s.contains("[theme-sync] first message for Cluster_Display"))key="cluster_negotiated";
-        else if(s.contains("first picture shown")||s.contains("firstFrame=true"))key="video_first_frame";
-        else if(s.contains("player ready"))key="video_ready";
-        else if(s.contains("[projection-theme] offered"))key="setup_offered";
-        else if(s.contains("[projection-theme] enabled"))key="setup_enabled";
-        else if(s.contains("[projection-theme] display registration"))key="display_registration";
-        else if(s.contains("[listener] cluster ready"))key="cluster_listener_ready";
-        else if(s.contains("[listener] uiSync ready"))key="uisync_listener_ready";
-        else if(s.contains("[listener] cluster first bytes="))key="cluster_first_bytes";
-        else if(s.contains("[listener] cluster stream closed bytes="))key="cluster_stream_end";
-        else if(s.contains("[seat-command]")&&s.contains("binder=accepted"))key="last_seat_binder_accepted";
-        else if(s.contains("[seat-command]")&&(s.contains("BCM matched")||s.contains("BCM unconfirmed")||s.contains("BCM unavailable")||s.contains("already at requested state")))key="last_seat_bcm_result";
-        else if(s.contains("[seat-feedback] notification"))key="last_seat_notification";
-        else if(s.contains("[radio-source]"))key="last_radio_source";
-        else if(s.contains("activation timed out"))key="last_activation_timeout";
+        if(s.contains("[milestone] identity_prepared"))key="identity_prepared";
+        else if(s.contains("[milestone] identity_advertised"))key="identity_advertised";
+        else if(s.contains("[milestone] transport_ready"))key="transport_ready";
         else if(e.important)key="last_"+e.category.name().toLowerCase(Locale.US)+"_warning";
         if(key!=null)milestones.put(key,e.time+" "+(s.length()>512?s.substring(0,512):s));
     }
