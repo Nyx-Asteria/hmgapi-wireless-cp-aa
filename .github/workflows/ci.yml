@@ -81,3 +81,9 @@ jobs:
           mkdir -p out/theme-session
           javac --release 8 -d out/theme-session wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java
           java -cp out/theme-session hmgapi.mods.wireless.ThemeTransferSessionTest
+
+      - name: Experimental bounded OPACK regression
+        run: |
+          mkdir -p out/theme-opack
+          javac --release 8 -d out/theme-opack wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/tests/ThemeOpackTest.java
+          java -cp out/theme-opack hmgapi.mods.wireless.ThemeOpackTest
