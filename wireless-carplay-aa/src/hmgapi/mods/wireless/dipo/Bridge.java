@@ -339,10 +339,9 @@ final class Bridge {
             if (sCpClient) sCpTx.reset("CarPlay session ended", false);
             boolean client = sCpClient, wireless = sCpWireless;
             sCpWireless = false;
-            sCpClient = false;
-            sCpConnected = false;
             synchronized (sPendingIn) {
-                sPendingIn.clear();
+                sCpClient = false;
+                resetReceive();
             }
             if (client) sendDetach();
             if (client || wireless) onUsbGone();
@@ -411,15 +410,29 @@ final class Bridge {
 
     // Exactly one drain owner; callbacks can enqueue during Binder delivery.
     private static boolean rxDraining;
+    private static long rxGeneration;
+
+    private static void resetReceive() {
+        synchronized (sPendingIn) {
+            sCpConnected = false;
+            sPendingIn.clear();
+            rxGeneration++;
+            rxDraining = false;
+        }
+    }
+
     private static void flushPending() {
+        final long generation;
         synchronized (sPendingIn) {
             if (rxDraining || !sCpConnected || sIap2 == null || !sCpClient || sUsb) return;
             rxDraining = true;
+            generation = rxGeneration;
         }
         while (true) {
             final byte[] packet;
             final IIap2Service service;
             synchronized (sPendingIn) {
+                if (generation != rxGeneration) return;
                 service = sIap2;
                 if (!sCpClient || sUsb || !sCpConnected || service == null || sPendingIn.isEmpty()) {
                     rxDraining = false;
@@ -574,11 +587,8 @@ final class Bridge {
             log("re-attach #" + attempt + " skipped (cpClient=" + sCpClient + " usb=" + sUsb + ")");
             return;
         }
-        sCpConnected = false;
+        resetReceive();
         Dipo.rgLinkDown("re-attach #" + attempt);
-        synchronized (sPendingIn) {
-            sPendingIn.clear();
-        }
         // the dead link's sender is abandoned (a native call blocked in it is never waited for); the new link gets a fresh thread and queue
         sCpTx.reset("re-attach #" + attempt, true);
         final String addr = sCpSerial != null ? sCpSerial : sAddr;
@@ -776,7 +786,12 @@ final class Bridge {
             log("iAP2 connected comp=" + component);
             // what DiPO keeps as the current device (setCurrentIapDeviceName): a Bluetooth address is the notice's key
             if ((component == COMPONENT_USB || component == COMPONENT_BT_CARPLAY) && serial != null && serial.contains(":")) sLastBtId = serial;
-            if (component == COMPONENT_USB) sUsb = true;
+            if (component == COMPONENT_USB) {
+                synchronized (sPendingIn) {
+                    sUsb = true;
+                    resetReceive();
+                }
+            }
             else if (component == COMPONENT_CARPLAY_CLIENT) {
                 if (!sCpClient || sUsb) {
                     log("Ignoring CarPlay-channel connected callback outside active wireless handover");

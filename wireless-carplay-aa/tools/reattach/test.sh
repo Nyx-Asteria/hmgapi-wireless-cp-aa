@@ -11,3 +11,5 @@ java -cp "$CP" hmgapi.mods.wireless.dipo.ReattachTest
 java -cp "$CP" hmgapi.mods.wireless.dipo.RgWatchTest
 
 java -cp "$CP" hmgapi.mods.wireless.dipo.AttachGenerationTest
+
+python3 receive_test.py
