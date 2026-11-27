@@ -86,6 +86,8 @@ final class Bridge {
     private static Handler sHandler;
     private static Method sNativeSend;
     private static final ArrayList<byte[]> sPendingIn = new ArrayList<byte[]>();
+    // Process-lifetime count; guarded by sPendingIn.
+    private static long diagnosticRxOverflow;
     private static BtListener sBt;
     private static TxListener sTx;
     /** CarPlay-channel sends: one sender thread + queue per link (a re-attach abandons the dead link's) */
@@ -281,6 +283,7 @@ final class Bridge {
             } else {
                 synchronized (sPendingIn) {
                     if (sPendingIn.size() < MAX_PENDING) sPendingIn.add(b);
+                    else diagnosticRxOverflow++;
                 }
             }
         } catch (Throwable t) {
@@ -291,11 +294,16 @@ final class Bridge {
     static void onCpSessionFinalized(int type) {
         try {
             int pendingCount;
-            synchronized (sPendingIn) { pendingCount = sPendingIn.size(); }
+            long rxOverflow;
+            synchronized (sPendingIn) {
+                pendingCount = sPendingIn.size();
+                rxOverflow = diagnosticRxOverflow;
+            }
             long elapsed = diagnosticStartedAt == 0 ? -1 : now() - diagnosticStartedAt;
             log("CarPlay teardown snapshot type=" + type + " durationMs=" + elapsed
                     + " wireless=" + sCpWireless + " client=" + sCpClient
                     + " connected=" + sCpConnected + " rxPending=" + pendingCount
+                    + " rxOverflowTotal=" + rxOverflow
                     + " " + sCpTx.diagnosticSnapshot());
             diagnosticStartedAt = 0;
             diagnosticCreatedAt = 0;
@@ -378,14 +386,20 @@ final class Bridge {
             all = new ArrayList<byte[]>(sPendingIn);
             sPendingIn.clear();
         }
+        int delivered = 0, failed = 0;
+        long began = now();
         for (byte[] b : all) {
             try {
                 s.Iap2SvcTransportReadDone(b, b.length);
+                delivered++;
             } catch (Throwable t) {
+                failed++;
                 error("flushPending", t);
             }
         }
-        log("flushed " + all.size() + " buffered CarPlay-channel packets");
+        log("CarPlay buffered receive flush attempted=" + all.size()
+                + " returnedNormally=" + delivered + " threw=" + failed
+                + " elapsedMs=" + (now() - began));
     }
 
     private static Method nativeSend() {
@@ -501,6 +515,12 @@ final class Bridge {
     static void onIap2ConnectSuccess(int component) {
         try {
             log("iAP2 connect success comp=" + component);
+            if (component == COMPONENT_CARPLAY_CLIENT && sCpClient && !sUsb) {
+                long created = diagnosticCreatedAt, started = diagnosticStartedAt, stamp = now();
+                log("CarPlay milestone iAP2 authenticated createdToAuthMs="
+                        + (created == 0 ? -1 : stamp - created)
+                        + " startToAuthMs=" + (started == 0 ? -1 : stamp - started));
+            }
             if (component == COMPONENT_CARPLAY_CLIENT && sCpClient && !sUsb) comp5Ready("ACTION_IAP2_CONNECTSUCCESS", true);
         } catch (Throwable t) {
             error("onIap2ConnectSuccess", t);
