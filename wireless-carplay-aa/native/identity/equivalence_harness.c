@@ -54,7 +54,11 @@ static void *fixture_malloc_withdraw(u32 n,const char *name,u32 flag){
     start_configure(0,0);
     return fixture_payload;
 }
-static int fixture_send(void *p){(void)p;fixture_sent++;return 1;}
+static int fixture_send_result=1;
+static int fixture_send(void *p){(void)p;fixture_sent++;return fixture_send_result;}
+static void *fixture_malloc_plain(u32 n,const char *name,u32 flag){
+    (void)n;(void)name;(void)flag;return fixture_payload;
+}
 static void *fixture_create(u32 link,u32 session){
     (void)link;(void)session;
     // Model a configuration withdrawal during OEM allocation.
@@ -130,6 +134,17 @@ int test_main(void){
     start_notify(1,2,0,0);
     if(fixture_destroyed!=2 || fixture_payload_destroyed!=1 || fixture_sent
        || start_sends!=before || start_stale!=2 || start_last!=-4 || fixture_payload[0]!=0x55)result|=1;
+    // Zero means dispatch refusal: caller still owns the packet.
+    session_malloc=fixture_malloc_plain;fixture_send_result=0;
+    start_len=6;start_msg[0]=0x40;
+    start_notify(1,2,0,0);
+    if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=1
+       || start_sends!=before+1 || start_last!=0 || fixture_payload[0]!=0x40)result|=1;
+    // Nonzero means the OEM callback took the packet; do not destroy it.
+    fixture_send_result=1;
+    start_notify(1,2,0,0);
+    if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=2
+       || start_sends!=before+2 || start_last!=1)result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";

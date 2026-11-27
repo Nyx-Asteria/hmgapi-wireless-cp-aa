@@ -77,6 +77,9 @@ static u32 start_notify(u32 link,u32 session,const unsigned char *params,u32 n){
     // No OEM dispatch under the identity mutex. A withdrawal after this
     // admission point cannot revoke an already admitted response.
     int rc=send_packet(packet);
+    // Verified K5 fc7cb675: zero means the packet was never handed to
+    // the OEM send callback. Nonzero means ownership may have transferred.
+    if(rc==0)packet_destroy(packet);
     __atomic_store_n(&start_last,rc,__ATOMIC_RELEASE);
     __atomic_add_fetch(&start_sends,1,__ATOMIC_RELEASE);
     return 0;
