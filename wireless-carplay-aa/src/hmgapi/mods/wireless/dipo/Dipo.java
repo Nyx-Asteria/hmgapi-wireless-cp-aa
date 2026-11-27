@@ -59,6 +59,7 @@ public final class Dipo {
     static final String[] RG_COMPONENTS = { "RouteGuidanceComponent0" };
 
     private static SessionJournal journal;
+    private static SessionRecording recording;
     static ModContext mod;
     static LoadedApp app;
     static volatile IIap2Service iap2;
@@ -83,17 +84,23 @@ public final class Dipo {
     static void log(String m) {
         mod.log(m);
         if (journal != null) journal.record(m);
+        if (recording != null) recording.record(m);
     }
 
     static void error(String m, Throwable t) {
         mod.error(m, t);
         if (journal != null) journal.record(m + " error=" + t.getClass().getSimpleName());
+        if (recording != null) recording.error(m + " error=" + t.getClass().getSimpleName());
     }
 
     /** Wireless.appLoaded, in DiPO's process */
     public static void start(ModContext m, LoadedApp a) {
         mod = m;
         app = a;
+        if (a.context != null && recording == null) {
+            try { recording = new SessionRecording(a.context, "wcp-session-bundles", false); }
+            catch (Throwable t) { m.error("Directory session recorder unavailable", t); }
+        }
         if (a.context != null && journal == null) {
             try { journal = new SessionJournal(a.context, "wcp-carplay-sessions"); }
             catch (Throwable t) { m.error("CarPlay session journal unavailable", t); }
@@ -147,40 +154,55 @@ public final class Dipo {
      * Do not use DIPO_SHORTCUT: that service's side effects are not verified.
      * No sleep, network operation, reconnect, or retry is performed here.
      */
+    private static void journalEvent(String action,String detail) {
+        if (journal != null) {
+            if ("beginAttempt".equals(action)) journal.beginAttempt(detail);
+            else if ("start".equals(action)) journal.start(detail);
+            else if ("end".equals(action)) journal.end(detail);
+            else journal.record(detail);
+        }
+        if (recording != null) {
+            if ("beginAttempt".equals(action)) recording.beginAttempt(detail);
+            else if ("start".equals(action)) recording.start(detail);
+            else if ("end".equals(action)) recording.end(detail);
+            else recording.record(detail);
+        }
+    }
+
     private static void installSessionJournal(final ModContext m, final LoadedApp a) {
-        if (journal == null || !Points.has("dipo.carplay.session_started")
+        if ((journal == null && recording == null) || !Points.has("dipo.carplay.session_started")
                 || !Points.has("dipo.carplay.session_finalized")) return;
         if (Points.has("dipo.carplay.session_created")) {
             m.hook(a.classLoader, "dipo.carplay.session_created", new MethodHook() {
                 @Override protected void beforeHookedMethod(Param p) {
-                    journal.beginAttempt("session creation");
-                    journal.record("MILESTONE session_created enter");
+                    journalEvent("beginAttempt", "session creation");
+                    journalEvent("record", "MILESTONE session_created enter");
                 }
                 @Override protected void afterHookedMethod(Param p) {
-                    if (p.hasThrowable()) journal.end("session creation threw");
-                    else journal.record("MILESTONE session_created returned");
+                    if (p.hasThrowable()) journalEvent("end", "session creation threw");
+                    else journalEvent("record", "MILESTONE session_created returned");
                 }
             });
         }
         m.hook(a.classLoader, "dipo.carplay.session_started", new MethodHook() {
             @Override protected void beforeHookedMethod(Param p) {
                 String transport = String.valueOf(p.args.length > 0 ? p.args[0] : "unknown");
-                journal.start("transport=" + transport);
-                journal.record("MILESTONE session_started enter transport=" + transport);
+                journalEvent("start", "transport=" + transport);
+                journalEvent("record", "MILESTONE session_started enter transport=" + transport);
             }
             @Override protected void afterHookedMethod(Param p) {
-                if (p.hasThrowable()) journal.end("session startup threw");
-                else journal.record("MILESTONE session_started returned");
+                if (p.hasThrowable()) journalEvent("end", "session startup threw");
+                else journalEvent("record", "MILESTONE session_started returned");
             }
         });
         m.hook(a.classLoader, "dipo.carplay.session_finalized", new MethodHook() {
             @Override protected void beforeHookedMethod(Param p) {
-                journal.record("MILESTONE session_finalized enter type=" +
+                journalEvent("record", "MILESTONE session_finalized enter type=" +
                         (p.args.length > 0 ? p.args[0] : "unknown"));
             }
             @Override protected void afterHookedMethod(Param p) {
-                journal.record("MILESTONE session_finalized " + (p.hasThrowable() ? "threw" : "returned"));
-                journal.end("session finalized type=" +
+                journalEvent("record", "MILESTONE session_finalized " + (p.hasThrowable() ? "threw" : "returned"));
+                journalEvent("end", "session finalized type=" +
                         (p.args.length > 0 ? p.args[0] : "unknown"));
             }
         });
