@@ -10,6 +10,7 @@ import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Looper;
 
 import com.broadcom.bt.hfdevice.hfbtcm.HfDeviceBTCMManager;
 import com.tcc.iap2.IIap2Listener;
@@ -101,6 +102,13 @@ public final class Dipo {
             m.nativePatch(a, "libCarPlayAudio.so");   // offer AAC and Opus on Wi-Fi
             m.nativePatch(a, "libCarPlayUtils.so");   // its AudioConverter calls go to libleafiaaac.so
         }
+        if (m.settingBoolean("auto_open", true)) {
+            try {
+                installAutoOpen(m, a);
+            } catch (Throwable t) {
+                m.error("CarPlay: automatic opening unavailable", t);
+            }
+        }
         if (tbt) turnByTurn();
         if (!tbt && !bridge) return;
         rgWatch();
@@ -122,6 +130,79 @@ public final class Dipo {
             }
         }, Context.BIND_AUTO_CREATE);
         log("DiPO: iAP2 server " + (bound ? "binding" : "can't be bound"));
+    }
+
+    /**
+     * Foreground-only feature. The K5 260507 HKMC_DiPO manifest declares
+     * .ui.DipoActivity as an exported, singleTask MAIN/LAUNCHER activity.
+     * Do not use DIPO_SHORTCUT: that service's side effects are not verified.
+     * No sleep, network operation, reconnect, or retry is performed here.
+     */
+    private static void installAutoOpen(final ModContext m, final LoadedApp a) {
+        if (a.context == null || !Points.has("dipo.carplay.session_started")
+                || !Points.has("dipo.carplay.session_finalized")) return;
+        final AutoOpen open = new AutoOpen(m, a.context);
+        m.hook(a.classLoader, "dipo.carplay.session_finalized", new MethodHook() {
+            @Override
+            protected void beforeHookedMethod(Param p) {
+                open.ended();
+            }
+        });
+        m.hook(a.classLoader, "dipo.carplay.session_started", new MethodHook() {
+            @Override
+            protected void afterHookedMethod(Param p) {
+                if (!p.hasThrowable() && Integer.valueOf(1).equals(p.args[0])) open.started();
+            }
+        });
+    }
+
+    private static final class AutoOpen {
+        private final ModContext mod;
+        private final Context context;
+        private final Handler main = new Handler(Looper.getMainLooper());
+        private boolean active;
+        private int generation;
+
+        AutoOpen(ModContext mod, Context context) {
+            this.mod = mod;
+            this.context = context;
+        }
+
+        synchronized void ended() {
+            active = false;
+            generation++;
+        }
+
+        synchronized boolean current(int token) {
+            return active && generation == token;
+        }
+
+        synchronized void started() {
+            if (active) return; // once per wireless session, even if DiPO repeats the callback
+            active = true;
+            final int token = ++generation;
+            main.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (!current(token)) return;
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_MAIN);
+                        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+                        intent.setClassName("com.daudio.app.dipo", "com.daudio.app.dipo.ui.DipoActivity");
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        if (context.getPackageManager().resolveActivity(intent, 0) == null) {
+                            mod.log("CarPlay: automatic opening skipped (stock activity unavailable)");
+                            return;
+                        }
+                        if (!current(token)) return;
+                        context.startActivity(intent);
+                        mod.log("CarPlay: automatic opening requested");
+                    } catch (Throwable t) {
+                        mod.error("CarPlay: automatic opening failed (session left untouched)", t);
+                    }
+                }
+            });
+        }
     }
 
     private static void turnByTurn() {
