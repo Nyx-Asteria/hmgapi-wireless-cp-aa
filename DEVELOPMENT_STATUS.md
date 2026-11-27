@@ -1,51 +1,7 @@
-# RC10 development status — audit A26
+# WCP 2.2.1-rc.7 development status
 
-Scope: WCP 2.2.1-rc.6 and Standalone TBT 1.0.0-rc.3. HMG-API SDK RC10 pinned to daa083717f07565ba16dc8a4d26291b7d68d3bf4. Vehicle testing is separate from off-car readiness. CPUL is actively developed independently: do not edit it or assume a stable consumer revision. No publication until explicitly authorized.
+Target DL322 USA 260507, Android 4.4.2, HMG-API RC10 (daa083717f07565ba16dc8a4d26291b7d68d3bf4), Nemesis 1.17.1. No release authorized.
 
-## Audit baseline
+Original RC6 main 4885b9f; reconstructed e07dbe1 with identical tree 8319df4b6bb7011b9ae4f5111cc82aee64d06072. 115 local commits reduced to 37; 169 upstream commits preserved. Historical audit records remain at the original and reconstructed baselines.
 
-66 historical commits reviewed (39 WCP, 27 STBT; STBT historical baseline provisional). Prior to A24, 18 corrective commits across both repositories. Latest inspected heads: WCP a66e22c, STBT 7b7df0f. Last confirmed green: WCP 2ff8b3a (45929828645), STBT 01caa45 (45929831498). A66e22c corrects unsupported shell utilities found in 8cc6106 CI; both latest CI runs were pending at A24 start.
-
-## Findings ledger
-
-| ID | Subject | State |
-|---|---|---|
-| A-001 | RC10 source floor | Host validated |
-| A-002 | Java service classpath isolation | Source verified |
-| A-003 | Redundant destination digest | Host validated; repeated polling retained intentionally |
-| A-004 | Stale completion manifests | Host validated; source retention limits detection |
-| A-005 | Mount removal during copy | Host validated with simulated mounts |
-| A-006 | Directory metadata power-loss durability | Open; file fsync is insufficient |
-| A-007 | Native collector retry backoff | Host validated |
-| A-008 | Native collector shutdown escalation | Host validated; uninterruptible processes remain possible |
-| A-009 | Orphan collector | Partial; readlink detector CI 45930330776 passed; device verification and abandoned-process termination pending |
-| A-010 | Native retention accounting | Host validated |
-| A-011 | Journal filesystem exceptions | Host validated against existing suite |
-| A-012 | Journal retention accounting | Host validated |
-| A-013 | Native marker retirement | Host validated; total filesystem failure remains possible |
-| A-014 | Lifecycle task backlog | Host validated |
-| A-015 | Stale packet producers | Host validated for sampled generations |
-| A-016 | Connection callback race | Host validated for explicit generations; OEM callbacks lack session IDs |
-| A-017 | Binder replacement | Host validated for queue isolation; old listener identity and in-flight transactions not fully addressed |
-| A-018 | Bluetooth broadcast race | Final pre-send generation check added in A24; residual check/send race remains |
-| A-019 | Aggregate RX diagnostics | Host validated |
-| A-020 | Saved integrated TBT=true | Configuration prerequisite; explicitly disable WCP integrated TBT when using STBT; preserve owner settings |
-| A-021 | Hidden STBT settings | Host validated |
-| A-022 | Removed AA firewall rule | Policy documented and historical network regressions reviewed; AA behavior not vehicle verified |
-| A-023 | CPUL identity consumer | Deferred until independent development stabilizes |
-| A-024 | Release regression coverage | Workflow source corrected; actual signed release not executed |
-| A-025 | RC3 changelog | Changelog written in 7b7df0f; CI 45930377058 passed |
-| A-026 | SDK pin checker | Host validated |
-| A-027 | Native recipe coexistence | Source validated for WCP integrated TBT off: separate iAP2 verify regions, identical AA recipes and no shared replace hooks. Vehicle validation pending |
-
-## Ownership and constraints
-
-WCP owns wireless connectivity, Wi-Fi audio, Now Playing and shared identity. STBT owns cluster guidance and junction/toll enlargement when installed together. Explicitly turn WCP integrated TBT off (saved values survive defaults), leave the wireless master on, preserve known-good hotspot configuration. No CPUL edits, no history rewrite, no release publication. Apple Maps and Google Maps are prior positive controls; Waze previously reports unsupported guidance and is not verified fixed. Do not fabricate navigation metadata. Native raw logs may contain private data.
-
-## Next work
-
-Check CI on exact latest heads; review remaining Bluetooth race without holding locks across Android calls; confirm native recipe coexistence and AA firewall documentation; assess directory sync compatibility and residual orphan writer limitation; finish changelog review and final host regression checklist. Record actual signed release status only after explicit authorization. Keep vehicle validation separate.
-
-## Final source audit closeout (A30)
-
-Runtime baselines: WCP 92e9569f3e49c80aa21e67b8b7c0374a95ad5053 (CI 45931183696 success), STBT 4d662314826f9d763230e8b37e02b411e3916c88 (CI 45930920550 success), CPUL 823530bc2eb83be71ad4b5399eb01d9a11428ec2 (last runtime CI 45931795153 success at 42594f7). All 27 original findings have a source/host disposition, including documented residual risks. A-006 directory sync is best effort via reflected libcore API; host tests exercise ordering and fallback, not actual device persistence. A-009 scans for foreign logcat writers during collection and before restart/readiness; it stops only its own child, not abandoned processes. A-018 invalidates queued Bluetooth generations on USB takeover and iAP2 disconnect; Android broadcast check/send and OEM callback identity limits remain. A-023 CPUL API v2 service, exact theme tuple, registration and withdrawal match WCP; shared libCarPlayCore recipe verify regions do not overlap. Native activation and physical validation remain unverified. Bundle pins, signed artifact validation and explicit publication approval are separate gates. No publication authorized.
+Next: branch CI baseline, obsolete infrastructure review, CPUL-style session logging, provider-independent SHA-256, USB mount validation and retry, internal spool recovery, sanitized pre-session/runtime/teardown capture. Observed Conscrypt SHA-256 and disconnected USB failures. Preserve working wireless and native guidance; Waze evidence only. WCP identity groups 20/21, stock default and gasoline K5 profile, legacy tuple 44C9FA31EC:985:19.0, early StartSession with optional addresses/source version, native readiness contract, opt-in mutually exclusive file transfer v2 experiments. CPUL owns virtual cluster, themed display IDs and viewAreas. Final integration, audit, consolidation and signing approval required.
