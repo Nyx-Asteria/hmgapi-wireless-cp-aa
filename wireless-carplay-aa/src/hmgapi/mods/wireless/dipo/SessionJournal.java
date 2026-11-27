@@ -31,13 +31,7 @@ final class SessionJournal {
         worker = new Handler(thread.getLooper());
         worker.post(new Runnable() { public void run() {
             if (!dir.isDirectory() && !dir.mkdirs()) return;
-            File[] files = dir.listFiles();
-            if (files != null) for (File f : files) if (f.getName().endsWith(".active")) {
-                if (append(f, row("END interrupted process/service restart"), true)
-                        && f.renameTo(new File(dir, f.getName().replace(".active", "-interrupted.log")))) {
-                    new File(dir, f.getName().replace(".active", ".native-enabled")).delete();
-                }
-            }
+            recoverInterrupted();
             prune();
         }});
     }
@@ -56,6 +50,8 @@ final class SessionJournal {
         worker.post(new Runnable() { public void run() {
             active = null;
             if (!dir.isDirectory() && !dir.mkdirs()) return;
+            recoverInterrupted();
+            prune();
             active = new File(dir, "session-" + wall + "-" + UUID.randomUUID().toString() + ".active");
             header = row("START " + bounded(detail), wall, elapsed);
             writeFailed = !append(active, header, true);
@@ -114,7 +110,7 @@ final class SessionJournal {
             // Preserve the header and newest segment; explicitly flag truncation.
             try (FileOutputStream out = new FileOutputStream(active, false)) {
                 out.write((header + row("LOGGER earlier events truncated at 2 MiB limit")).getBytes("UTF-8"));
-            } catch (IOException ignored) { writeFailed = true; return; }
+            } catch (IOException | SecurityException ignored) { writeFailed = true; return; }
         }
         if (!append(active, line, false)) writeFailed = true;
     }
@@ -123,7 +119,7 @@ final class SessionJournal {
         try (FileOutputStream out = new FileOutputStream(file, true)) {
             out.write(line.getBytes("UTF-8"));
             if (sync) out.getFD().sync();
-        } catch (IOException ignored) { return false; }
+        } catch (IOException | SecurityException ignored) { return false; }
         return true;
     }
 
@@ -142,6 +138,20 @@ final class SessionJournal {
             .replaceAll("(?i)(password|passphrase|psk|token|secret|ssid)\\s*[:=]\\s*[^ ,;]+", "$1=[redacted]");
         if (clean.length() > 4096) clean = clean.substring(0,4096) + " [truncated]";
         return wall + "\t" + elapsed + "\t" + clean + "\n";
+    }
+
+    /** Retry interrupted recordings before opening another session on the worker. */
+    private void recoverInterrupted() {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            if (!f.isFile() || !f.getName().endsWith(".active")) continue;
+            File target = new File(dir, f.getName().replace(".active", "-interrupted.log"));
+            if (!target.exists() && append(f, row("END interrupted process/service restart or failed finalization"), true)
+                    && f.renameTo(target)) {
+                new File(dir, f.getName().replace(".active", ".native-enabled")).delete();
+            }
+        }
     }
 
     private void prune() {
