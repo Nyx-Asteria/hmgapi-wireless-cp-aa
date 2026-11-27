@@ -53,6 +53,23 @@ public final class SessionExporterTest {
             put(part, "old partial");
             SessionExporter.exportDirectory(spool, logs, "sessions");
             check(!part.exists() && Arrays.equals(SessionExporter.digest(src), SessionExporter.digest(target)), "partial recovery");
+            SessionExporter.MountGuard guard = new SessionExporter.MountGuard(usb, mounts);
+            File removable = new File(spool, "session-004.log");
+            put(removable, "complete before removal");
+            put(mounts, "");
+            try {
+                SessionExporter.exportOne(removable, dest, guard);
+                throw new AssertionError("removed mount accepted");
+            } catch (IOException expected) {}
+            check(!new File(dest, removable.getName()).exists(), "removed mount not written");
+            put(mounts, "other-device " + usb.getCanonicalPath() + " vfat rw 0 0\n");
+            try {
+                guard.check();
+                throw new AssertionError("replacement mount accepted");
+            } catch (IOException expected) {}
+            put(mounts, "device " + usb.getCanonicalPath() + " vfat rw 0 0\n");
+            SessionExporter.exportOne(removable, dest, new SessionExporter.MountGuard(usb, mounts));
+            check(new File(dest, removable.getName()).isFile(), "export resumes on mounted USB");
             System.out.println("Java session export tests passed");
         } finally { remove(root); }
     }
