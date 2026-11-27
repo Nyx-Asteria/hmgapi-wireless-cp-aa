@@ -198,6 +198,9 @@ Parent 7e2c717814f91735857e1852cd8b0201fa0618a3. Actually extracted original iOS
 ## Independent FileTransfer cycle — remote-control client classification
 Parent 98992e6dad4c27f45a0f392f5db5088fbf626175. Reopened actual extracted metadata and daemon; identified six named CarPlay client UUID imports, explicit sender communication-channel and iAP event surfaces, and modern receiver RemoteControlSessionSetup signature. No file-transfer UUID mapping established; do not equate ProtocolData2 with FTv2. Primary identity 100%; transport research 75% held, protocol 45%, runtime experiments 0%. Prior CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46073598927"}]. No CPUL changes or release.
 
+## Independent FileTransfer cycle — daemon sender lifecycle
+Parent 8c8e55733a1c1924e3ce3db86399c9ece276a2cb. Directly reopened extracted daemon strings and CarKit/AirPlaySender metadata. Confirmed typed sender/receiver properties, lifecycle selectors and separate acceptance/closed/timeout/encoding outcomes, plus exact capability string locations in both frameworks. No new transport mapping; transport estimate 75%, protocol 45%, experiments 0%, primary 100%. Prior CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46074107789"}]. No CPUL changes or release.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
