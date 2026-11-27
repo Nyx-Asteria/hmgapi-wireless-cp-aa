@@ -1,4 +1,4 @@
-"""Run production exporter with a fake mount and legacy/modern logcat."""
+"""Exercise native capture and readiness with legacy/modern logcat."""
 import os
 from pathlib import Path
 import subprocess
@@ -41,7 +41,7 @@ for modern in (False, True):
             + '/bin/sleep 0.1\n'
             + 'case "$n" in\n'
             + '1) [ ! -e "' + str(dest) + '" ] || exit 99; echo "dev ' + str(usb) + ' vfat rw 0 0" > "' + str(mounts) + '";;\n'
-            + '2) [ ! -e "' + str(dest / "session-001.native.log") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
+            + '2) [ ! -e "' + str(native / "session-001.native-ready") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
             + '4) kill -TERM "$PPID";;\nesac\n')
         sleep.chmod(0o755)
         script = (root / "export-sessions.sh").read_text()
@@ -53,10 +53,12 @@ for modern in (False, True):
                        check=True, timeout=15)
         assert ("-T 200" in (d / "args").read_text()) == modern
         assert not (d / "premature").exists()
-        assert (dest / "session-001.native.log").read_text() == "native\n"
+        assert (native / "session-001.native.log").read_text() == "native\n"
+        assert (native / "session-001.native-ready").read_text().strip() == "ready"
+        assert not dest.exists(), "native collector must not write USB"
         assert not (dest / "session-002.log").exists(), "Java journals belong to the Java exporter"
         assert not (dest / "session-003.active").exists()
         assert not list(native.glob("session-003*"))
         assert not list(dest.glob("*.part"))
         assert (src / "session-001.log").exists()
-        print("Native export passed: modern=" + str(modern))
+        print("Native capture passed: modern=" + str(modern))
