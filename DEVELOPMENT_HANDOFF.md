@@ -186,6 +186,9 @@ Parent 1fee4feee348e46ce10bb444957993e64f60c4ca. Actual firmware extraction, Thu
 ## Independent FileTransfer cycle — platform generic fallback confirmed
 Parent 64cd524f0130f924417a0c934e9a0d285738b7cc. Reopened actual user ZIP and executed local Thumb disassembly; decoded six PlatformControl commands via literal base and identified genuine unrestricted fallback to session+0x28 at 0x7ca0–0x7cb8, returning delegate result, absent callback -6714. Earlier restricted Control path alone did not rule out generic dispatch. Need determine installed delegate behavior and phone-side routing; no file capability asserted. Primary checkpoint 100%, transport research 70% estimate, protocol research 45%, experiments 0%. Prior CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46072123082"}]. No release or CPUL edits.
 
+## Independent FileTransfer cycle — HKMC callback whitelist closed
+Parent 09e743698fba8f2f4d6a0518b1d1fd125eb70dd5. Reopened actual extracted callback binary, verified hash and decoded five command literals plus unmatched-command return. No file-channel implementation in this callback; platform fallback alone cannot establish support. Next prioritize phone-side endpoint mapping. Primary identity 100%, transport research 70% held (negative evidence), protocol 45%, experiments 0%. Parent CI running at inspection (46072734654). No CPUL edits or release.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
