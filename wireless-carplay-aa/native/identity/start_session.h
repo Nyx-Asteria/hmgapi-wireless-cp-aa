@@ -98,7 +98,7 @@ static int start_append(Blob stock,unsigned char *buf,int cap,u32 id,u32 x,u32 y
     if(n<0)return n;
     if(!start_len || (n&1) || n>START_CAP_PROBE_MAX)return n;
     if(!buf){
-        unsigned char probe[START_CAP_PROBE_MAX];
+        unsigned char probe[START_CAP_PROBE_MAX]={0};
         if(n && stock(probe,n,id,x,y)!=n)return n;
         for(int i=0;i<n;i+=2)
             if(probe[i]==0x43 && probe[i+1]==last)return n;

@@ -103,6 +103,21 @@ static int fixture_blob_unstable(unsigned char *buf,int cap,u32 id,u32 x,u32 y){
     (void)cap;(void)id;(void)x;(void)y;
     return buf?2:4;
 }
+static int fixture_builder_success=1,fixture_builder_sizing_only=0;
+static u32 capability_build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 count,const char *name,Lookup lookup){
+    (void)h;(void)s;(void)a;(void)b;(void)cmd;(void)name;(void)lookup;
+    const Param *p=table;
+    for(u32 i=0;i<count;i++){
+        if(p[i].id!=6 && p[i].id!=7)continue;
+        Blob callback=(Blob)p[i].length;
+        unsigned char bytes[8]={0};
+        int n=callback(0,0,p[i].id,0,0);
+        if(n!=(p[i].id==6?4:6)){result|=1;return 0;}
+        if(!fixture_builder_sizing_only && callback(bytes,n,p[i].id,0,0)!=n){result|=1;return 0;}
+        if(!fixture_builder_sizing_only && (bytes[n-2]!=0x43 || bytes[n-1]!=(p[i].id==6?1:0)))result|=1;
+    }
+    return fixture_builder_success;
+}
 static void semihost(u32 operation,const void *argument);
 int test_main(void){
     root[0]=parameter(20,13);root[0].children=(u32)identity_children;
@@ -289,6 +304,20 @@ int test_main(void){
     raw_builder=fallback_build;lock_mutex=mutex_fail;
     if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)result|=1;
     raw_builder=build;lock_mutex=mutex;
+    // Exercise both wrapped callbacks through a real matching builder.
+    root[3]=parameter(6,12);root[3].length=(u32)fixture_blob;
+    root[4]=parameter(7,12);root[4].length=(u32)fixture_blob;
+    raw_builder=capability_build;start_len=6;
+    identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(start_capability_built!=3)result|=1;
+    fixture_builder_success=0;
+    identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(start_capability_built)result|=1;
+    fixture_builder_success=1;fixture_builder_sizing_only=1;
+    identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(start_capability_built)result|=1;
+    root[3].used=root[4].used=0;root[3].length=root[4].length=0;
+    raw_builder=build;
     // Coherent JNI snapshot includes the actual native payload state.
     start_len=6;
     __atomic_store_n(&identity_evidence,7,__ATOMIC_RELEASE);
