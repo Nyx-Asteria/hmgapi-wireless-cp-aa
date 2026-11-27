@@ -296,24 +296,37 @@ final class Bridge {
     /** iAP2 bytes from the phone over the CarPlay channel: to the iAP2 server (buffered until its session is up) */
     static void onCpIapIn(Object cp, byte[] data, int len) {
         try {
-            if (cp != null) sCp = cp;
-            if (data == null || data.length == 0 || len <= 0 || sUsb) return;
+            if (data == null || data.length == 0 || len <= 0) return;
+            final long generation;
+            synchronized (sPendingIn) {
+                if (sUsb) return;
+                generation = rxGeneration;
+            }
             if (len >= data.length) len = data.length;
             byte[] b = new byte[len];
             System.arraycopy(data, 0, b, 0, len);
-            if (!sCpClient) startCpClient("iAP2 data from CarPlay channel");
-            synchronized (sPendingIn) {
-                if (!sCpClient || sUsb) return;
-                if (sPendingIn.size() >= MAX_PENDING) {
-                    diagnosticRxOverflow++;
-                    return;
-                }
-                sPendingIn.add(b);
-            }
-            flushPending();
+            acceptReceive(cp, b, generation);
         } catch (Throwable t) {
             error("onCpIapIn", t);
         }
+    }
+
+    // Generation is sampled before copying, then revalidated at admission.
+    private static void acceptReceive(Object cp, byte[] packet, long generation) {
+        synchronized (sPendingIn) {
+            if (generation != rxGeneration || sUsb) return;
+        }
+        if (!sCpClient) startCpClient("iAP2 data from CarPlay channel", generation);
+        synchronized (sPendingIn) {
+            if (generation != rxGeneration || !sCpClient || sUsb) return;
+            if (cp != null) sCp = cp;
+            if (sPendingIn.size() >= MAX_PENDING) {
+                diagnosticRxOverflow++;
+                return;
+            }
+            sPendingIn.add(packet);
+        }
+        flushPending();
     }
 
     static void onCpSessionFinalized(int type) {
@@ -370,14 +383,22 @@ final class Bridge {
     }
 
     static void startCpClient(final String why) {
-        synchronized (Bridge.class) {
-            if (sCpClient || sUsb) return;
+        final long receiveGeneration;
+        synchronized (sPendingIn) { receiveGeneration = rxGeneration; }
+        startCpClient(why, receiveGeneration);
+    }
+
+    private static void startCpClient(final String why, long receiveGeneration) {
+        final String addr;
+        final int generation;
+        synchronized (sPendingIn) {
+            if (receiveGeneration != rxGeneration || sCpClient || sUsb) return;
             sCpClient = true;
             sCpConnected = false;
+            addr = sAddr;
+            sCpSerial = addr;
+            generation = attachGeneration.advance();
         }
-        final String addr = sAddr;
-        sCpSerial = addr;
-        final int generation = attachGeneration.advance();
         if (reattachEnabled()) sReattach.sessionUp();
         Dipo.rgSessionUp();
         txWatch();
@@ -403,9 +424,15 @@ final class Bridge {
         });
     }
 
-    static void onCpClientConnected() {
-        sCpConnected = true;
+    static boolean onCpClientConnected(long generation) {
+        synchronized (sPendingIn) {
+            if (generation != rxGeneration || !sCpClient || sUsb) return false;
+            sCpConnected = true;
+        }
         flushPending();
+        synchronized (sPendingIn) {
+            return generation == rxGeneration && sCpClient && !sUsb && sCpConnected;
+        }
     }
 
     // Exactly one drain owner; callbacks can enqueue during Binder delivery.
@@ -793,11 +820,12 @@ final class Bridge {
                 }
             }
             else if (component == COMPONENT_CARPLAY_CLIENT) {
-                if (!sCpClient || sUsb) {
+                final long generation;
+                synchronized (sPendingIn) { generation = rxGeneration; }
+                if (!onCpClientConnected(generation)) {
                     log("Ignoring CarPlay-channel connected callback outside active wireless handover");
                     return;
                 }
-                onCpClientConnected();
                 sReattach.connected();
             }
         }

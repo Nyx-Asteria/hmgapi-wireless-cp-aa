@@ -28,11 +28,16 @@ public class ReceiveTest {
     static long diagnosticRxOverflow;
     static boolean rxDraining;
     static long rxGeneration;
-    static void startCpClient(String why) { sCpClient=true; sCpConnected=false; }
+    static void startCpClient(String why, long generation) {
+        synchronized (sPendingIn) {
+            if (generation != rxGeneration || sUsb || sCpClient) return;
+            sCpClient=true; sCpConnected=false;
+        }
+    }
     static int errors;
     static void error(String why, Throwable t) { errors++; }
 """ + "\n".join(method(s) for s in (
-    "static void onCpIapIn(", "static void onCpClientConnected(", "private static void flushPending(", "private static void resetReceive("
+    "static void onCpIapIn(", "static boolean onCpClientConnected(", "private static void acceptReceive(", "private static void flushPending(", "private static void resetReceive("
 )) + """
     static void check(boolean v,String msg) { if(!v) throw new AssertionError(msg); }
     static void send(int n) { onCpIapIn(null,new byte[]{(byte)n},1); }
@@ -46,7 +51,7 @@ public class ReceiveTest {
         byte[] reusable={1,99};
         onCpIapIn(null,reusable,1); reusable[0]=55;
         send(2); check(seen.isEmpty(),"buffer until connected");
-        onCpClientConnected(); check(seen.equals(Arrays.asList(1,2)),"copy and FIFO");
+        onCpClientConnected(rxGeneration); check(seen.equals(Arrays.asList(1,2)),"copy and FIFO");
         seen.clear();
         CountDownLatch entered=new CountDownLatch(1), release=new CountDownLatch(1);
         sIap2=(b,n)->{seen.add((int)b[0]);if(b[0]==3){entered.countDown();await(release);}};
@@ -60,7 +65,7 @@ public class ReceiveTest {
         seen.clear();sCpConnected=false;
         for(int i=0;i<65;i++)send(i);
         check(sPendingIn.size()==64&&diagnosticRxOverflow==1,"bounded queue");
-        onCpClientConnected();check(seen.size()==64&&seen.get(63)==63,"drain retained packets");
+        onCpClientConnected(rxGeneration);check(seen.size()==64&&seen.get(63)==63,"drain retained packets");
         seen.clear();sIap2=(b,n)->{if(b[0]==7)throw new IllegalStateException("fixture");seen.add((int)b[0]);};
         send(7);send(8);check(errors==1&&seen.equals(Arrays.asList(8)),"failure releases drain ownership");
         sUsb=true;send(9);check(seen.equals(Arrays.asList(8)),"USB excludes wireless receive");
@@ -72,12 +77,22 @@ public class ReceiveTest {
         send(11);resetReceive();
         sIap2=(b,n)->{seen.add((int)b[0]);if(b[0]==12){newEntered.countDown();await(newRelease);}};
         send(12);
-        Thread newDrain=new Thread(()->onCpClientConnected());newDrain.setDaemon(true);newDrain.start();await(newEntered);
+        Thread newDrain=new Thread(()->onCpClientConnected(rxGeneration));newDrain.setDaemon(true);newDrain.start();await(newEntered);
         send(13);oldRelease.countDown();oldDrain.join(3000);
         check(!oldDrain.isAlive()&&seen.equals(Arrays.asList(10,12)),"old drain must not consume new queue");
         send(14);check(seen.equals(Arrays.asList(10,12)),"old drain must not release new ownership");
         newRelease.countDown();newDrain.join(3000);
         check(!newDrain.isAlive()&&seen.equals(Arrays.asList(10,12,13,14)),"new generation FIFO and old queue discarded");
+        long stale = rxGeneration;
+        resetReceive(); sCpClient=false;
+        acceptReceive(new Object(),new byte[]{15},stale);
+        check(!sCpClient && sPendingIn.isEmpty(),"stale producer cannot resurrect client");
+        check(!onCpClientConnected(stale) && !sCpConnected,"stale connection rejected");
+        send(16); check(sPendingIn.size()==1,"current producer accepted");
+        check(!onCpClientConnected(stale) && !sCpConnected,"old connection cannot drain new queue");
+        check(onCpClientConnected(rxGeneration) && seen.get(seen.size()-1)==16,"current connection drains");
+        sUsb=true;resetReceive();
+        check(!onCpClientConnected(rxGeneration),"USB rejects connection");
         System.out.println("Bridge receive FIFO, copy, overflow, concurrent enqueue, failure and USB checks passed");
     }
 }
