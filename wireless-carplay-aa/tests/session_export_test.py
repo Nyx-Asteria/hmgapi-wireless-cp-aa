@@ -30,7 +30,9 @@ for modern in (False, True):
         proc.mkdir()
         foreign = proc / "123"
         foreign.mkdir()
-        (foreign / "cmdline").write_bytes(b"logcat\x00-f\x00" + str(native / "session-999.native.log").encode() + b"\x00")
+        (foreign / "exe").symlink_to("/system/bin/logcat")
+        (foreign / "fd").mkdir()
+        (foreign / "fd" / "3").symlink_to(native / "session-999.native.log")
         (native / "session-999.native.log").write_text("orphan\n")
         logcat = binpath / "logcat"
         helptext = "-T COUNT" if modern else "-t COUNT"
@@ -49,7 +51,7 @@ for modern in (False, True):
             + 'n=$((n+1)); echo "$n" > "' + str(d / "ticks") + '"\n'
             + '/bin/sleep 0.1\n'
             + 'case "$n" in\n'
-            + '1) [ ! -e "' + str(d / "starts") + '" ] && [ ! -e "' + str(native / "session-999.native-ready") + '" ] || touch "' + str(d / "orphan-violation") + '"; rm "' + str(foreign / "cmdline") + '";;\n'
+            + '1) [ ! -e "' + str(d / "starts") + '" ] && [ ! -e "' + str(native / "session-999.native-ready") + '" ] || touch "' + str(d / "orphan-violation") + '"; rm "' + str(foreign / "fd" / "3") + '";;\n'
             + '2) [ ! -e "' + str(dest) + '" ] || exit 99; echo "dev ' + str(usb) + ' vfat rw 0 0" > "' + str(mounts) + '";;\n'
             + '5) [ ! -e "' + str(native / "session-001.native-ready") + '" ] || touch "' + str(d / "premature") + '"; mv "' + str(active) + '" "' + str(src / "session-001.log") + '"; rm "' + str(marker) + '";;\n'
             + '7) kill -TERM "$PPID";;\nesac\n')

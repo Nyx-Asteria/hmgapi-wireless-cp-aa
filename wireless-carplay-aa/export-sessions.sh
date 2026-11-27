@@ -12,19 +12,21 @@ proc_root=/proc
 # Do not signal an unowned PID (PID reuse is possible). Refuse to start a second
 # collector or publish readiness until the matching writer has disappeared.
 foreign_writer() {
-    for entry in "$proc_root"/[0-9]*/cmdline; do
-        [ -r "$entry" ] || continue
-        pid=${entry%/cmdline}; pid=${pid##*/}
+    for entry in "$proc_root"/[0-9]*; do
+        [ -d "$entry" ] || continue
+        pid=${entry##*/}
         [ "$pid" != "$native_pid" ] || continue
-        # Match a logcat executable argument and its exact output-directory argument.
-        if tr '\000' '\n' < "$entry" 2>/dev/null | awk -v dir="$native_dir/" '
-            NR == 1 { executable = ($0 ~ /(^|\/)logcat$/) }
-            previous == "-f" && index($0, dir "session-") == 1 && $0 ~ /\.native\.log$/ { output = 1 }
-            { previous = $0 }
-            END { exit !(executable && output) }
-        '; then
-            return 0
-        fi
+        executable=$(readlink "$entry/exe" 2>/dev/null) || continue
+        case "$executable" in
+            */logcat) ;;
+            *) continue ;;
+        esac
+        for fd in "$entry"/fd/*; do
+            output=$(readlink "$fd" 2>/dev/null) || continue
+            case "$output" in
+                "$native_dir"/session-*.native.log|"$native_dir"/session-*.native.log.[123]) return 0 ;;
+            esac
+        done
     done
     return 1
 }
