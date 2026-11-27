@@ -17,7 +17,7 @@
 # for a mod whose build.sh compiles native code (hmgapi-adbd: 21.4.7075529, r21e, for API 19).
 # HMG-API's own CI runs it on mods/examples/hello (ci.yml, mod-workflow; weekly with an NDK too).
 # Adapted from Open-HMG/HMG-API mod.yml at daa083717f07565ba16dc8a4d26291b7d68d3bf4.
-# RC8 release SDK asset is unavailable; validate its tagged source catalogue instead.
+# Validate the RC10 floor against its immutable tagged source catalogue.
 name: Mod (source floor validation)
 
 on:
@@ -155,11 +155,11 @@ jobs:
           echo "MODS=$(echo $MODS)" >> "$GITHUB_ENV"
           echo "Mods: $MODS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Retrieve RC8 floor catalogue from immutable source
+      - name: Retrieve RC10 floor catalogue from immutable source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: Open-HMG/HMG-API
-          ref: 939484edfc7cbfe5d9f1f1bc3b321056dadb41a6
+          ref: daa083717f07565ba16dc8a4d26291b7d68d3bf4
           path: .hmgapi-floor
           persist-credentials: false
 
@@ -168,14 +168,14 @@ jobs:
           python3 - <<'PY'
           import glob,json,os
           files=glob.glob('.hmgapi-floor/core/hookpoints/*.json')
-          assert files, 'RC8 hook catalogue absent'
+          assert files, 'RC10 hook catalogue absent'
           points=sorted({p['id'] for f in files for p in json.load(open(f))['points']})
           assert points
-          path=os.path.join(os.environ['RUNNER_TEMP'],'rc8-points.txt')
+          path=os.path.join(os.environ['RUNNER_TEMP'],'rc10-points.txt')
           open(path,'w').write('\n'.join(points)+'\n')
           PY
           rm -rf .hmgapi-floor
-          echo "HMGAPI_FLOOR_POINTS=$RUNNER_TEMP/rc8-points.txt" >> "$GITHUB_ENV"
+          echo "HMGAPI_FLOOR_POINTS=$RUNNER_TEMP/rc10-points.txt" >> "$GITHUB_ENV"
 
       - name: HMG-API floor and hook points
         env:
@@ -184,7 +184,7 @@ jobs:
           python3 - <<'PY'
           import json,os
           for m in os.environ['MODS'].split():
-              assert json.load(open(m+'/mod.json'))['hmgapi']=='>=1.1.0-rc.8', 'Update source floor validation for changed floor'
+              assert json.load(open(m+'/mod.json'))['hmgapi']=='>=1.1.0-rc.10', 'Update source floor validation for changed floor'
           PY
           python3 "$HMGAPI_SDK/bin/check-points.py" $MODS --repo "$REPO"
           python3 - <<'PY'
