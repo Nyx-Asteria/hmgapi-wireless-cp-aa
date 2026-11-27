@@ -199,23 +199,44 @@ final class Bridge {
         }, SPP_CONNECT_DELAY_MS);
     }
 
-    static void onSppUp(final String addr) {
+    private static final java.util.concurrent.atomic.AtomicInteger btGeneration =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    private static boolean currentBtAttach(int generation, String addr) {
+        return btGeneration.get() == generation && sSession && addr.equals(sAddr)
+                && !sUsb && !sCpClient && !sCpWireless && enabled();
+    }
+
+    private static synchronized void failBtAttach(int generation) {
+        if (btGeneration.get() == generation) sSession = false;
+    }
+
+    static synchronized void onSppUp(final String addr) {
         if (addr == null || sSession) return;
         sAddr = addr;
         if (sCpClient || sCpWireless || !enabled() || sUsb) return;
         sSession = true;
+        final int generation = btGeneration.incrementAndGet();
         handler().post(new Runnable() {
             @Override
             public void run() {
                 try {
+                    if (!currentBtAttach(generation, addr)) {
+                        failBtAttach(generation);
+                        return;
+                    }
                     Context c = context;
                     if (c == null) {
                         log("no context, cannot start session");
-                        sSession = false;
+                        failBtAttach(generation);
                         return;
                     }
-                    // Restore direct OEM connectivity AP startup for K5 testing.
+                    // Keep the verified K5 connectivity AP startup sequence.
                     ensureHotspot(c);
+                    if (!currentBtAttach(generation, addr)) {
+                        failBtAttach(generation);
+                        return;
+                    }
                     Intent i = new Intent(ACTION_ATTACH);
                     i.setPackage(IAP2_PKG);
                     i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
@@ -224,7 +245,7 @@ final class Bridge {
                     c.sendBroadcast(i);
                     log("BT_ATTACHED sent for " + addr);
                 } catch (Throwable t) {
-                    sSession = false;
+                    failBtAttach(generation);
                     error("onSppUp", t);
                 }
             }
@@ -350,9 +371,11 @@ final class Bridge {
     }
 
     static void startCpClient(final String why) {
-        if (sCpClient) return;
-        sCpClient = true;
-        sCpConnected = false;
+        synchronized (Bridge.class) {
+            if (sCpClient || sUsb) return;
+            sCpClient = true;
+            sCpConnected = false;
+        }
         final String addr = sAddr;
         sCpSerial = addr;
         final int generation = attachGeneration.advance();
@@ -614,8 +637,9 @@ final class Bridge {
         }
     }
 
-    static void onSppDown(String addr) {
+    static synchronized void onSppDown(String addr) {
         if (addr == null || !addr.equals(sAddr)) return;
+        btGeneration.incrementAndGet();
         if (sCpWireless) {
             sSession = false;
             startCpClient("bluetooth dropped during wireless CarPlay");
@@ -629,15 +653,18 @@ final class Bridge {
     }
 
     static void sendDetach() {
+        final int generation = btGeneration.get();
         handler().post(new Runnable() {
             @Override
             public void run() {
                 try {
+                    if (btGeneration.get() != generation || sCpClient || sCpWireless) return;
                     Context c = context;
                     if (c == null) return;
                     Intent i = new Intent(ACTION_DETACH);
                     i.setPackage(IAP2_PKG);
                     i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+                    if (btGeneration.get() != generation || sCpClient || sCpWireless) return;
                     c.sendBroadcast(i);
                     log("BT_DETACHED sent");
                 } catch (Throwable t) {
