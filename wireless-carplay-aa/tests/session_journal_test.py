@@ -67,11 +67,35 @@ public class JournalTest {
    }
   }
   check(first&&second,"both attempts finalized");
+  j.beginAttempt("drop generation A");
+  for(int i=0;i<256;i++)j.record("old-event "+i);
+  j.beginAttempt("drop generation B");
+  for(int i=0;i<7;i++)j.record("new-dropped "+i);
+  j.end("drop test end");Handler.drain();
+  boolean generationA=false,generationB=false;
+  for(File f:dir.listFiles())if(f.getName().endsWith(".log")){
+   String content=read(f);
+   if(content.contains("START drop generation A")){
+    check(!content.contains("dropped queued events="),"new drops must not appear in old generation");generationA=true;
+   }
+   if(content.contains("START drop generation B")){
+    check(content.contains("dropped queued events=7"),"new generation owns its drops");generationB=true;
+   }
+  }
+  check(generationA&&generationB,"both drop generations finalized");
   j.start("failure");Handler.drain();
   File blocked=find(dir,".active");check(blocked.delete()&&blocked.mkdir(),"inject unwritable path");
   j.record("cannot write");j.end("failed");Handler.drain();
   check(blocked.isDirectory(),"failed sync must not publish completed file");
   check(blocked.delete(),"cleanup");
+  File orphan=new File(dir,"session-orphan.active");
+  File orphanMarker=new File(dir,"session-orphan.native-enabled");
+  Files.write(orphan.toPath(),"orphan".getBytes("UTF-8"));
+  Files.write(orphanMarker.toPath(),"enabled".getBytes("UTF-8"));
+  j.start("retry recovery");Handler.drain();
+  check(!orphan.exists()&&new File(dir,"session-orphan-interrupted.log").isFile(),"retry orphan recovery without restart");
+  check(!orphanMarker.exists(),"orphan native marker removed after finalization");
+  j.end("done");Handler.drain();
   System.out.println("Session journal recovery, redaction, timestamps, queue and write failure passed");
  }
 }""",

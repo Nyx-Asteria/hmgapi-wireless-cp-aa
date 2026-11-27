@@ -16,7 +16,9 @@ final class SessionJournal {
     private static final int KEEP = 12, QUEUE = 256;
     private final Handler worker;
     private final File dir;
-    private final AtomicInteger queued = new AtomicInteger(), dropped = new AtomicInteger();
+    private final AtomicInteger queued = new AtomicInteger();
+    // Each accepted generation owns its own drop counter, even while old work drains.
+    private AtomicInteger dropped;
     private File active;
     private String header;
     private boolean writeFailed;
@@ -29,13 +31,7 @@ final class SessionJournal {
         worker = new Handler(thread.getLooper());
         worker.post(new Runnable() { public void run() {
             if (!dir.isDirectory() && !dir.mkdirs()) return;
-            File[] files = dir.listFiles();
-            if (files != null) for (File f : files) if (f.getName().endsWith(".active")) {
-                if (append(f, row("END interrupted process/service restart"), true)
-                        && f.renameTo(new File(dir, f.getName().replace(".active", "-interrupted.log")))) {
-                    new File(dir, f.getName().replace(".active", ".native-enabled")).delete();
-                }
-            }
+            recoverInterrupted();
             prune();
         }});
     }
@@ -49,10 +45,13 @@ final class SessionJournal {
     synchronized void start(final String detail) {
         if (accepting) return;
         accepting = true;
+        dropped = new AtomicInteger();
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
         worker.post(new Runnable() { public void run() {
             active = null;
             if (!dir.isDirectory() && !dir.mkdirs()) return;
+            recoverInterrupted();
+            prune();
             active = new File(dir, "session-" + wall + "-" + UUID.randomUUID().toString() + ".active");
             header = row("START " + bounded(detail), wall, elapsed);
             writeFailed = !append(active, header, true);
@@ -65,26 +64,29 @@ final class SessionJournal {
 
     synchronized void record(String message) {
         if (!accepting) return;
-        if (queued.incrementAndGet() > QUEUE) { queued.decrementAndGet(); dropped.incrementAndGet(); return; }
+        final AtomicInteger sessionDropped = dropped;
+        if (queued.incrementAndGet() > QUEUE) { queued.decrementAndGet(); sessionDropped.incrementAndGet(); return; }
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
         final String raw = bounded(message);
         if (!worker.post(new Runnable() { public void run() {
             try { if (active != null) {
-                int lost = dropped.getAndSet(0);
+                int lost = sessionDropped.getAndSet(0);
                 if (lost != 0) write(row("LOGGER dropped queued events=" + lost));
                 write(row(raw, wall, elapsed));
             }} finally { queued.decrementAndGet(); }
-        }})) queued.decrementAndGet();
+        }})) { queued.decrementAndGet(); sessionDropped.incrementAndGet(); }
     }
 
     synchronized void end(String reason) {
         if (!accepting) return;
         accepting = false;
+        final AtomicInteger sessionDropped = dropped;
+        dropped = null;
         final long wall = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
         final String raw = bounded("END " + reason);
         worker.post(new Runnable() { public void run() {
             if (active == null) return;
-            int lost = dropped.getAndSet(0);
+            int lost = sessionDropped.getAndSet(0);
             if (lost != 0) write(row("LOGGER dropped queued events=" + lost));
             write(row(raw, wall, elapsed));
             // Sync final bytes before exposing a completed file to the USB exporter.
@@ -108,7 +110,7 @@ final class SessionJournal {
             // Preserve the header and newest segment; explicitly flag truncation.
             try (FileOutputStream out = new FileOutputStream(active, false)) {
                 out.write((header + row("LOGGER earlier events truncated at 2 MiB limit")).getBytes("UTF-8"));
-            } catch (IOException ignored) { writeFailed = true; return; }
+            } catch (IOException | SecurityException ignored) { writeFailed = true; return; }
         }
         if (!append(active, line, false)) writeFailed = true;
     }
@@ -117,7 +119,7 @@ final class SessionJournal {
         try (FileOutputStream out = new FileOutputStream(file, true)) {
             out.write(line.getBytes("UTF-8"));
             if (sync) out.getFD().sync();
-        } catch (IOException ignored) { return false; }
+        } catch (IOException | SecurityException ignored) { return false; }
         return true;
     }
 
@@ -136,6 +138,20 @@ final class SessionJournal {
             .replaceAll("(?i)(password|passphrase|psk|token|secret|ssid)\\s*[:=]\\s*[^ ,;]+", "$1=[redacted]");
         if (clean.length() > 4096) clean = clean.substring(0,4096) + " [truncated]";
         return wall + "\t" + elapsed + "\t" + clean + "\n";
+    }
+
+    /** Retry interrupted recordings before opening another session on the worker. */
+    private void recoverInterrupted() {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            if (!f.isFile() || !f.getName().endsWith(".active")) continue;
+            File target = new File(dir, f.getName().replace(".active", "-interrupted.log"));
+            if (!target.exists() && append(f, row("END interrupted process/service restart or failed finalization"), true)
+                    && f.renameTo(target)) {
+                new File(dir, f.getName().replace(".active", ".native-enabled")).delete();
+            }
+        }
     }
 
     private void prune() {
