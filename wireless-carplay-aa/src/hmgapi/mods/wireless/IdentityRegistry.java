@@ -67,7 +67,10 @@ final class IdentityRegistry implements CarPlayIdentification {
         checkModId(modId);
         log("API request from " + modId + ": remove vehicle identity");
         Runnable notify;
-        synchronized (this) { if(vehicles.remove(modId)!=null) invalidate(); notify = changed; }
+        synchronized (this) {
+            if(vehicles.remove(modId)==null)return;
+            invalidate(); notify = changed;
+        }
         if (notify != null) notify.run();
     }
 
@@ -97,7 +100,10 @@ final class IdentityRegistry implements CarPlayIdentification {
         checkModId(modId);
         log("API request from " + modId + ": remove theme identity");
         Runnable notify;
-        synchronized (this) { if (themes.remove(modId) != null) { sessionStart = false; invalidate(); } notify = changed; }
+        synchronized (this) {
+            if(themes.remove(modId)==null)return;
+            sessionStart=false; invalidate(); notify = changed;
+        }
         if (notify != null) notify.run();
     }
 

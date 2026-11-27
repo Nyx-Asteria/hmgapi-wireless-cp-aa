@@ -56,6 +56,10 @@ public final class IdentityRegistryHarness {
                 CarPlayIdentification.VehicleIdentity.ENGINE_GASOLINE,new CarPlayIdentification.Connector[0]));
         check(registry.identityStatus().generation==stable && changes[0]==0
                 && registry.identityStatus().readiness==CarPlayIdentification.Readiness.ADVERTISED,"identical registration preserves readiness");
+        registry.removeTheme("fixture.foreign");
+        registry.removeVehicle("fixture.foreign");
+        check(registry.identityStatus().generation==stable && changes[0]==0
+                && registry.identityStatus().readiness==CarPlayIdentification.Readiness.ADVERTISED,"foreign removal is a no-op");
         registry.registerTheme("fixture.theme",new CarPlayIdentification.ThemeIdentity("THEME1",985,"19.0"),true);
         check(registry.identityStatus().generation!=stable && changes[0]==1
                 && registry.identityStatus().readiness==CarPlayIdentification.Readiness.REGISTERED,"session opt-in change invalidates readiness");
@@ -63,6 +67,13 @@ public final class IdentityRegistryHarness {
         check(snapshot.generation==registry.identityStatus().generation && snapshot.vehicle!=null && snapshot.theme!=null,"atomic snapshot");
         registry.removeTheme("fixture.theme");
         check(snapshot.theme!=null && snapshot.generation!=registry.identityStatus().generation,"old snapshot remains distinct");
+        long removed=registry.identityStatus().generation;
+        int notified=changes[0];
+        registry.removeTheme("fixture.theme");
+        check(registry.identityStatus().generation==removed && changes[0]==notified,"repeated withdrawal is a no-op");
+        registry.removeVehicle("fixture.k5");
+        check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.UNAVAILABLE
+                && changes[0]==notified+1,"last owner withdrawal clears readiness");
         System.out.println("PASS mock mods compose independent vehicle and theme contributions");
     }
 
