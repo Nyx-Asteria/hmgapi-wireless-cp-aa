@@ -25,6 +25,13 @@ static void *root_values(u16 id,u16 type,u16 *n,void *key,int *more){
     (void)type;(void)n;(void)key;if(more)*more=0;
     if(id==20 || id==21)return (void*)stock_lookup;if(id==24)return (void*)wireless_values;return &value;
 }
+static void *alternate_wireless(u16 id,u16 type,u16 *n,void *key,int *more){
+    (void)id;(void)type;(void)n;(void)key;if(more)*more=7;return &value;
+}
+static void *alternate_root(u16 id,u16 type,u16 *n,void *key,int *more){
+    if(id==24){if(more)*more=3;return (void*)alternate_wireless;}
+    return root_values(id,type,n,key,more);
+}
 static const Param *stock_wireless_children(u16 id,u16 type,u16 *count,void *key,int *more){
     (void)id;(void)type;(void)key;if(more)*more=0;*count=stock_wireless_count;return stock_wireless;
 }
@@ -132,12 +139,21 @@ int test_main(void){
     children=identity_children(24,13,&child_count,0,&more);
     if(children!=stock_wireless || child_count!=WIRELESS_MAX+1 || theme_children_active
        || wireless_value(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
+    // Preserve the actual OEM root callback and metadata on fallback.
+    build_lookup=alternate_root;
+    more=0;
+    if(identity_value(24,13,&child_count,0,&more)!=(void*)alternate_wireless || more!=3)result|=1;
+    stock_wireless_count=4;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(!children || identity_value(24,13,&child_count,0,&more)!=(void*)wireless_value)result|=1;
+    if(wireless_value(0,5,&child_count,0,&more)!=&value || more!=7)result|=1;
+    build_lookup=0;stock_wireless_lookup=0;
     stock_wireless_count=2;
     // Native tuple parser mirrors the Java API, including uint32 bounds.
     if(!theme_tuple_ok("THEME1:985:19.0",15)
-       || !theme_tuple_ok("A:4294967295:1",14)
+       || !theme_tuple_ok("A:4294967295:1",13)
        || !theme_tuple_ok("A:0:1",5)
-       || theme_tuple_ok("A:4294967296:1",14)
+       || theme_tuple_ok("A:4294967296:1",13)
        || theme_tuple_ok("A:01:1",6)
        || theme_tuple_ok("A::1",4)
        || theme_tuple_ok(":1:1",4)

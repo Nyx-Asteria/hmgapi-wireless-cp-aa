@@ -30,7 +30,7 @@ static Param info_copy[9],status_copy[15];
 #define WIRELESS_GROUP 24
 #define WIRELESS_MAX 8
 static Children stock_children;
-static Lookup wireless_lookup;
+static Lookup wireless_lookup,build_lookup,stock_wireless_lookup;
 static Param wireless_copy[WIRELESS_MAX+2];
 
 static void copy(char *d,const char *s,u32 n){while(n--)*d++=*s++;}
@@ -62,15 +62,14 @@ static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
         if(id==6)identity_seen|=2;
         if(more)*more=0;return theme;
     }
-    return wireless_lookup(id,type,n,key,more);
+    return (stock_wireless_lookup?stock_wireless_lookup:wireless_lookup)(id,type,n,key,more);
 }
 #include "start_session.h"
 
 static Param parameter(u16 id,u16 type);
 static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *more){
-    (void)type;(void)key;if(more)*more=0;
-    if(id==20 && has_vehicle){identity_seen|=1;*count=has_ev?9:5;return info_copy;}
-    if(id==21 && has_ev){*count=15;return status_copy;}
+    if(id==20 && has_vehicle){if(more)*more=0;identity_seen|=1;*count=has_ev?9:5;return info_copy;}
+    if(id==21 && has_ev){if(more)*more=0;*count=15;return status_copy;}
     if(id==WIRELESS_GROUP && stock_children){
         theme_children_active=0;
         u16 n=0;const Param *stock=stock_children(id,type,&n,key,more);
@@ -91,8 +90,16 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
 static void *identity_value(u16 id,u16 type,u16 *n,void *key,int *more){
     if(id==20 && has_vehicle){if(more)*more=0;return (void*)info_value;}
     if(id==21 && has_ev){if(more)*more=0;return (void*)status_value;}
-    if(id==WIRELESS_GROUP && has_theme && wireless_lookup){if(more)*more=0;return (void*)wireless_value;}
-    return root_lookup(id,type,n,key,more);
+    Lookup original=build_lookup?build_lookup:root_lookup;
+    if(id==WIRELESS_GROUP && has_theme && wireless_lookup && stock_children){
+        void *stock=original(id,type,n,key,more);
+        stock_wireless_lookup=(Lookup)stock;
+        // Keep the stock callback (including NULL) for unsupported child lists.
+        // For a supported list the wrapper preserves OEM values for unowned IDs.
+        if(!stock || !theme_children_active)return stock;
+        return (void*)wireless_value;
+    }
+    return original(id,type,n,key,more);
 }
 static Param parameter(u16 id,u16 type){Param p={1,id,type,0,0,0,0,0};return p;}
 static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void *table,u32 count,const char *name,Lookup lookup){
@@ -101,6 +108,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
     if(lock_mutex(&identity_mutex))return 0;
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){unlock_mutex(&identity_mutex);return raw_builder(handle,session,a,b,command,table,count,name,lookup);}
     identity_seen=0;theme_children_active=0;
+    stock_children=0;stock_wireless_lookup=0;build_lookup=lookup;
     Param root[24];for(u32 i=0;i<24;i++){
         root[i]=root_table[i];
         if(start_len && root[i].id==6 && root[i].length){stock_sent_blob=(Blob)root[i].length;root[i].length=(u32)start_sent_blob;}
@@ -114,6 +122,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
     u32 required=(has_vehicle?1:0)|(has_theme?2:0);
     if(result && required && (identity_seen&required)==required)
         __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
+    build_lookup=0;stock_wireless_lookup=0;
     unlock_mutex(&identity_mutex);return result;
 }
 static Builder recipe_original(Builder entry){
