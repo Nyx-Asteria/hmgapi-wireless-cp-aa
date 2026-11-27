@@ -5,18 +5,20 @@
 # has the tools/catalog.py add command for the catalogue PR in HMG-API.
 #
 # Secret, in the "release" environment (v* tags only): MOD_KEY, the author key
-# (base64 of the PKCS#8 key file). Its public half is .github/mod-key.pub.
+# (base64 of the PKCS#8 key file), and MOD_KEY_PUB (base64 of its public half).
 name: Release
 
 on:
   push:
     tags: ["v*"]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   version:
+    if: github.ref_type == 'tag' || startsWith(github.event.head_commit.message, 'Release wireless ')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,7 +27,7 @@ jobs:
       - name: The tag is mod.json's version
         run: |
           v=$(python3 -c 'import json; print(json.load(open("wireless-carplay-aa/mod.json"))["version"])')
-          test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, but wireless-carplay-aa/mod.json's version is $v"; exit 1; }
+          test "$GITHUB_REF_TYPE" != tag || test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, but wireless-carplay-aa/mod.json's version is $v"; exit 1; }
           echo "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$' || { echo "$v: x.y.z or x.y.z-alpha.N, -beta.N, -rc.N (HMG-API's docs/releasing.md)"; exit 1; }
       - run: python3 .github/check-pin.py
 
@@ -105,16 +107,22 @@ jobs:
       - name: Key
         env:
           MOD_KEY: ${{ secrets.MOD_KEY }}
+          MOD_KEY_PUB: ${{ secrets.MOD_KEY_PUB }}
         run: |
           umask 077
           k="$RUNNER_TEMP/keys"
           mkdir -p "$k"
-          echo "$MOD_KEY" | base64 -d > "$k/mod.key"
+          test -n "$MOD_KEY" && test -n "$MOD_KEY_PUB"
+          printf '%s' "$MOD_KEY" | base64 -d > "$k/mod.key"
+          printf '%s' "$MOD_KEY_PUB" | base64 -d > "$k/mod.key.pub"
+          test -s "$k/mod.key.pub"
           test -s "$k/mod.key" || { echo "MOD_KEY is missing (the release environment's secret)"; exit 1; }
           echo "MOD_KEY_FILE=$k/mod.key" >> "$GITHUB_ENV"
 
       - name: Signed package and NEMESIS packages
-        run: .github/release.sh "$GITHUB_REF_NAME" "$MOD_KEY_FILE"
+        run: |
+          v=$(python3 -c 'import json; print(json.load(open("wireless-carplay-aa/mod.json"))["version"])')
+          .github/release.sh "v$v" "$MOD_KEY_FILE"
 
       - name: Forget the key
         if: always()
@@ -124,13 +132,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          v=${GITHUB_REF_NAME#v}
-          notes=".github/release-notes/$GITHUB_REF_NAME.md"
+          v=$(python3 -c 'import json; print(json.load(open("wireless-carplay-aa/mod.json"))["version"])')
+          tag="v$v"
+          notes=".github/release-notes/$tag.md"
           if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
-          pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease --latest=false" ;; esac   # a pre-release is never "Latest"
-          gh release create "$GITHUB_REF_NAME" --draft $pre --verify-tag --title "Wireless CarPlay + Android Auto $v" "$@" out/assets/*
+          pre=""; case "$tag" in *-*) pre="--prerelease --latest=false" ;; esac   # a pre-release is never "Latest"
+          gh release create "$tag" --draft $pre --target "$GITHUB_SHA" --title "Wireless CarPlay + Android Auto $v" "$@" out/assets/*
           {
-            echo "### Draft release $GITHUB_REF_NAME"
+            echo "### Draft release $tag"
             case "$v" in
               *-*) echo "Not published. A pre-release isn't for the catalogue (finals only); a HMG-API pre-release that bundles it pins it with this tools/release-mods.txt line:" ;;
               *) echo "Not published. Once it is, the catalogue PR in HMG-API (a maintainer's) starts with:" ;;
