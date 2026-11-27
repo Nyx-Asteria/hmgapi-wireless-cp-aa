@@ -37,3 +37,11 @@ These may describe AirPlay session configuration rather than iAP2 file-session v
 6. Keep CPUL checkpoint withheld until entire shared identity implementation is complete; vehicle verification follows RC.
 
 No runtime changes in this research checkpoint. No claim of support for v2, no invented IDs, and no new firmware collection required yet.
+
+## Incremental archive and native control-flow checkpoint
+- Concatenated part-000 and part-001 in order and independently computed SHA-256: 0f420961d25265cbf7df6550b87eac8105bbd7616eabad588bd1229f1a927be4, matching supplied combined manifest. Individual part hashes not independently confirmed in this cycle.
+- Re-extracted K5 libiap2session.so, MD5 fc7cb675b46a44bd893a1edc054c5e71. Disassembly with llvm-objdump -d --triple=thumbv7-linux-gnueabi.
+- 0x1b146 iAP2SessCtrlGetSupportedFileSession tail-branches to 0x1dbe0 CheckFileSession. That function checks feature-list selectors 12 and 11; if neither is available returns 0. Otherwise tests NowPlayingMedia used flag 26, NowPlayingPlayback used flag 15 and MLAPlaylist used flag 5; any enabled returns 1. These are capability/feature checks, not a negotiated file-transfer version. Do not repurpose these internal selectors as protocol IDs.
+- 0x171bc CheckSetup reads the low nibble of payload byte 1 and branches on 4, 6 and 2. The branch for 4 assembles bytes at offsets 2..9 into a 64-bit value. This is evidence of a stock setup parser, not a v2 discriminator. No parser changes justified yet.
+- Partial streaming scan of incremental Mach-O entries matching CarKit, AirPlaySender, AccessoryiAP2Shim, AccessoryCommunications, iAP2 and CarPlay names, files <=100 MiB. Observed FileTransferInfo/fileTransferInfo in 17 entries, supportsFileTransfer in CarKit. No explicit version match in the observed output; scan timed out before completion, so absence is not established. Shared string pools may cause repetition across extracted binaries; strings alone cannot establish ownership.
+- Next: finish targeted archive scan without broad regex, distinguish Mach-O string ownership via xrefs, examine session initialization and version-specific evidence before any opt-in advertisement. No runtime change.
