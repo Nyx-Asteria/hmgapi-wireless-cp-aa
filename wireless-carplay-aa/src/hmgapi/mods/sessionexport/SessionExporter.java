@@ -406,6 +406,10 @@ public final class SessionExporter {
     private static boolean sessionFolder(String name) {
         return name.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_session-[0-9]+_[0-9a-f-]{36}");
     }
+    static boolean verifiedBundleMarker(File source) {
+        try { return "verified\n".equals(bundleMarker(child(source,".exported"))); }
+        catch(IOException|SecurityException ex){return false;}
+    }
     static void exportBundles(File spool, File root, Guard guard) throws Exception {
         File[] sessions=spool.listFiles();
         if(sessions==null)return;
@@ -415,7 +419,7 @@ public final class SessionExporter {
             if(!sessionFolder(source.getName())||!source.isDirectory())continue;
             try {
                 child(spool,source.getName());
-                if(child(source,".exported").isFile())continue;
+                if(verifiedBundleMarker(source))continue;
                 exportBundle(source,root,guard);
             } catch(Exception e){if(first==null)first=e;}
         }
@@ -528,6 +532,13 @@ public final class SessionExporter {
         guard.check();
         // Mark only after verified publication. A failed local marker can be retried.
         File marker=child(source,".exported");
-        try(FileOutputStream out=new FileOutputStream(marker)){out.write("verified\n".getBytes("UTF-8"));out.getFD().sync();}
+        File pending=child(source,".exported.part");
+        if(pending.exists()&&!pending.delete())throw new IOException("cannot reset local marker");
+        try(FileOutputStream out=new FileOutputStream(pending)){out.write("verified\n".getBytes("UTF-8"));out.getFD().sync();}
+        guard.check();
+        if(marker.exists()&&!marker.delete())throw new IOException("cannot replace invalid local marker");
+        if(!pending.renameTo(marker))throw new IOException("cannot publish local marker");
+        flushDirectory(source,NO_GUARD);
+        if(!verifiedBundleMarker(source))throw new IOException("local marker verification failed");
     }
 }

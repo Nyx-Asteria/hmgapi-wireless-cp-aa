@@ -250,7 +250,7 @@ final class SessionLogWriter {
                 for(File f:files) {
                     if(closed)break;
                     synchronized(spoolLock) {
-                        if(!f.isDirectory()||!sessionName(f.getName())||new File(f,".exported").isFile())continue;
+                        if(!f.isDirectory()||!sessionName(f.getName())||verifiedMarker(f))continue;
                         exporting=f;
                     }
                     try {exporter.exportOne(f,dest);exportFailure=null;}
@@ -302,18 +302,33 @@ final class SessionLogWriter {
         }
         if(failure!=null)throw failure;
     }
+    static boolean verifiedMarker(File session) {
+        File marker=new File(session,".exported");
+        try {
+            if(!marker.isFile()||marker.length()!=9)return false;
+            if(!marker.getCanonicalFile().equals(new File(session.getCanonicalFile(),".exported")))return false;
+            try(DataInputStream in=new DataInputStream(new FileInputStream(marker))){
+                byte[] bytes=new byte[9];in.readFully(bytes);
+                return Arrays.equals(bytes,"verified\n".getBytes("UTF-8"))&&in.read()==-1;
+            }
+        }catch(IOException|SecurityException ex){return false;}
+    }
     private void prune(boolean reserve) throws IOException {
         synchronized(spoolLock) {
         File[] files=root.listFiles();
         if(files==null) return;
         List<File> sessions=new ArrayList<File>();
         long size=0;
-        for(File f:files) if(f.isDirectory() && sessionName(f.getName())) { sessions.add(f); size+=size(f); }
-        Collections.sort(sessions,new Comparator<File>(){public int compare(File a,File b){boolean ae=new File(a,".exported").isFile(), be=new File(b,".exported").isFile(); if(ae!=be)return ae?-1:1; return a.getName().compareTo(b.getName());}});
+        int interrupted=0;
+        for(File f:files) if(f.isDirectory()) {
+            if(sessionName(f.getName())) { sessions.add(f); size+=size(f); }
+            else if(f.getName().endsWith(".open")) { interrupted++;size+=size(f); }
+        }
+        Collections.sort(sessions,new Comparator<File>(){public int compare(File a,File b){boolean ae=verifiedMarker(a), be=verifiedMarker(b); if(ae!=be)return ae?-1:1; return a.getName().compareTo(b.getName());}});
         // Reserve one full session while a writer may be active.
-        while(sessions.size()>(reserve?MAX_SESSIONS-1:MAX_SESSIONS) || size>MAX_TOTAL-(reserve?MAX_SESSION:0)) {
+        while(sessions.size()+interrupted>(reserve?MAX_SESSIONS-1:MAX_SESSIONS) || size>MAX_TOTAL-(reserve?MAX_SESSION:0)) {
             File f=null;
-            for(File candidate:sessions)if(!candidate.equals(exporting)&&new File(candidate,".exported").isFile()){f=candidate;break;}
+            for(File candidate:sessions)if(!candidate.equals(exporting)&&verifiedMarker(candidate)){f=candidate;break;}
             if(f==null)throw new IOException("log retention full: unexported recordings preserved");
             sessions.remove(f); long n=size(f); delete(f); size-=n;
         }

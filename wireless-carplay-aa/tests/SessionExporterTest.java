@@ -217,6 +217,11 @@ public final class SessionExporterTest {
             check(!new File(bundle,".exported").exists(),"remount not marked");
             SessionExporter.exportBundles(bundles,logs,new SessionExporter.MountGuard(usb,mounts));
             check(new File(bundle,".exported").isFile(),"retry verified");
+            put(new File(bundle,".exported"),"verif");
+            check(!SessionExporter.verifiedBundleMarker(bundle),"torn marker rejected");
+            SessionExporter.exportBundles(bundles,logs,new SessionExporter.MountGuard(usb,mounts));
+            check(SessionExporter.verifiedBundleMarker(bundle),"torn marker repaired");
+            check(!new File(bundle,".exported.part").exists(),"marker published atomically");
             System.out.println("Java session export tests passed");
         } finally { remove(root); }
     } finally { for(java.security.Provider provider:providers) java.security.Security.addProvider(provider); }

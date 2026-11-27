@@ -69,6 +69,14 @@ public final class SessionLogWriterTest {
             try{SessionLogWriter.recover(root);throw new AssertionError("conflict ignored");}catch(IOException expected){}
             check(broken.isDirectory());
             check(new File(root,"good/errors.log").isFile());
+            File markerDir=new File(root,"marker-test");check(markerDir.mkdir());
+            File marker=new File(markerDir,".exported");
+            SessionLogWriter.writeText(marker,"");
+            check(!SessionLogWriter.verifiedMarker(markerDir));
+            SessionLogWriter.writeText(marker,"verif");
+            check(!SessionLogWriter.verifiedMarker(markerDir));
+            SessionLogWriter.writeText(marker,"verified\n");
+            check(SessionLogWriter.verifiedMarker(markerDir));
             System.out.println("SessionLogWriterTest passed");
         }finally{SessionLogWriter.delete(root);}
     }
