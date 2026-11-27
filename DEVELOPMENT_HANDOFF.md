@@ -222,6 +222,9 @@ Parent a87d8ae7d2902f12f1669e49bda1c5d282f78b05. Actual source binary reopened/h
 ## Independent FileTransfer cycle — StartSession schema audit and BLE/iAP2 boundary
 Parent e7a88c8c44c18f34e07d3fb05e23d3506c00d4e1. Actual daemon hash, dictionary parser disassembly, CFString keys and selector xref inspected; verified BLE property-list caller and SDK/asset dictionary types. Compared actual WCP codec, preparation, API and fixture source; shape consistent, raw iAP2 TLV mapping/optional-field acceptance not established by BLE parser. No speculative mandatory-field changes. Primary identity 100%, transport 85%, protocol research 75% held, experiments 0%. Previous CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46078610509"}]. CPUL handoff updated, no CPUL code changes or release.
 
+## Independent FileTransfer cycle — CoreAccessories report and pairing opt-out
+Parent 19f5d12be11c12962975ccf1345ff9a1ebb20776. Actual binary hash and disassembly inspected, corrected simulation-only inference, verified normal connection-request path and conditional Ultra opt-out in matching prompt flow. CPUL handoff includes concrete fresh/existing pairing diagnostic test recommendation, no source dependency. Primary identity 100% implementation, transport 85%, protocol 75%, experiments 0%. Previous CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46078806380"}]. No runtime changes or release.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
