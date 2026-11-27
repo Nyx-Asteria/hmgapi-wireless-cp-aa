@@ -6,7 +6,7 @@ Update this file in every development commit, together with the code; preserve t
 WCP parent fcf00a245edb0168ff74780234b4d142edbe83f5 (CI passed: https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46055754533).
 STBT checkpoint 6233b8f3582966b15c35926630a370cff2442082 (snapshot publication/interrupted USB recovery tests; CI not checked here).
 Logging complete off-car per prior tracker, preserve persistent session-end USB exports, categorized diagnostics, SHA-256 fallback, recovery, bounded retention.
-Shared identity 77% implementation/research estimate after verified prior CI: vehicle/K5 profile 100% implementation (verified existing opt-in registration and native gasoline/EV fixtures; cross-project audit pending), shared API/CPUL readiness 99%, StartSession 98%, theme identity 99%, FileTransfer v2 45% research, diagnostics/validation 97%. Estimates, not test coverage. Integration/audit, final consolidation and signed publication 0%.
+Primary shared identity: 100% implementation, source integration checkpoint verified at 3b951c745ce78fde4ca6085b28d682c7d629bb98 (all 20 recent branch CI runs green). FileTransfer is independent: research 45%, translation 0%, native recipe 0%, conditional IPSW-derived path 0%. Vehicle testing, integration audit, consolidation and publication remain separate.
 API v3 native construction evidence is present; advertisement means builder evidence, not phone acceptance. Reconfiguration invalidates evidence.
 
 ## Current WCP change (previous cycle c134bf2)
@@ -150,11 +150,14 @@ Parent 8baf42c1385f653d83b0e9e15b5c146dab7b7918. Successfully enumerated the two
 ## Current cycle — targeted theme and FileTransfer metadata pass
 Parent ea044eedf4dc9a7b72738901bbe0c2baeb33e95b. Completed actual streaming content scan of the incremental archive within the four-framework scope documented in docs/filetransfer-v2-research.md. Theme librarian lifecycle and distinct iOS/accessory content version metadata are relevant to CPUL theme investigation; no explicit FTv2 version/checksum wire schema identified. User requested a quick pass for lower-priority transfer work. Mark primary identity components implementation-complete (100%) separately from pending CI, firmware callback verification and later integration/vehicle tests. FTv2 experiments remain unimplemented and disabled; do not invent protocol constants. Overall estimate 77% held pending the remaining scope. No CPUL edits or releases.
 
+## Current priority override — CPUL API v3 integration approved
+User explicitly supersedes every historical entry requiring FileTransfer completion before CPUL integration. The primary checkpoint is 3b951c745ce78fde4ca6085b28d682c7d629bb98; see docs/cpul-api-v3-integration.md for exact pinned contract, CI evidence and known limitations. No release. FileTransfer research continues independently, starting with transport ownership rather than guessed wire implementation. All future experimental paths default off. Historical entries below/above are retained for provenance, not active gating rules.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
 3. Functional corrections: preserve working wireless projection and Apple/Google Maps guidance, investigate transport latency, improve Waze evidence collection. Do not promise Waze support.
-4. Shared identity: groups 20/21 independent of EV registration; stock identity default, explicit gasoline K5 profile without fabricated EV connectors; native combustion serializer; preserve EV support and legacy full theme tuple; early StartSession preparation with stock fallback; native readiness; independent FileTransfer v2 experiments.
+4. Shared identity: groups 20/21 independent of EV registration; stock identity default, explicit gasoline K5 profile without fabricated EV connectors; native combustion serializer; preserve EV support and legacy full theme tuple; early StartSession preparation with stock fallback; native readiness. Independent FileTransfer v2 experiments are no longer a prerequisite for CPUL integration.
 5. Coordinated integration: WCP/CPUL readiness contract, native recipe compatibility, display/identity ownership, single navigation publisher, cross-project negotiation diagnostics.
 6. Regression/audit: production implementation tests, Android API 19, upgrade/recovery, cross-project source audit.
 7. Coordinated release: align WCP 2.2.1-rc.7 and STBT 1.0.0-rc.4, permanent package IDs/signing keys, full changelogs, verified combined bundle, explicit publication approval, non-draft prereleases.
