@@ -12,9 +12,7 @@ final class IdentityInstaller {
     private static boolean loaded;
     private static volatile boolean armed;
     private static boolean suspended, shutdownPending;
-    private static boolean resumeRetry;
-    private static int resumeAttempts;
-    private static final int MAX_RESUME_ATTEMPTS=5;
+    private static final ResumeRecovery resumeRecovery=new ResumeRecovery();
     private static long armedGeneration=-1;
     private static byte[] lastStart;
     private static final StartWithdrawal withdrawal=new StartWithdrawal();
@@ -87,7 +85,7 @@ final class IdentityInstaller {
     private static synchronized void apply(ModContext mod, LoadedApp app, IdentityRegistry registry) {
         if(!mod.enabled()){suspend(mod,registry);return;}
         if(shutdownPending && !finishShutdown(mod))return;
-        if(suspended){registry.setSuspended(false);suspended=false;resumeRetry=true;resumeAttempts=0;}
+        if(suspended){registry.setSuspended(false);suspended=false;resumeRecovery.begin();}
         IdentityRegistry.Snapshot snapshot=registry.snapshot();
         CarPlayIdentification.VehicleIdentity vehicle=snapshot.vehicle;
         CarPlayIdentification.ThemeIdentity theme=snapshot.theme;
@@ -97,7 +95,7 @@ final class IdentityInstaller {
         if(loaded) NativeIdentity.shutdown();
         lastStart=null;
         withdrawal.setPending(loaded);
-        if(vehicle==null && theme==null){resumeRetry=false;return;}
+        if(vehicle==null && theme==null){resumeRecovery.stop();return;}
         int dcType = -1, dcPower = 0, acType = -1, acPower = 0;
         if (vehicle != null) {
             for (CarPlayIdentification.Connector connector : vehicle.connectors) {
@@ -125,7 +123,7 @@ final class IdentityInstaller {
             }
             withdrawal.setPending(false); // successful native configure clears its payload
             armed = true;
-            resumeRetry=false;
+            resumeRecovery.stop();
             armedGeneration=snapshot.generation;
             mod.log("CarPlay identity: generation="+armedGeneration+" armed");
             if (theme != null) {
@@ -140,7 +138,7 @@ final class IdentityInstaller {
             armed=false; armedGeneration=-1; lastStart=null; withdrawal.setPending(loaded);
             if(loaded){shutdownPending=true;finishShutdown(mod);}
             // Only retry the known transient native-gate error automatically.
-            if(!(error instanceof NativeFailure) || ((NativeFailure)error).code!=-21)resumeRetry=false;
+            resumeRecovery.failed(error instanceof NativeFailure ? ((NativeFailure)error).code : 0);
             registry.report(snapshot.generation,CarPlayIdentification.Readiness.FAILED,
                     error instanceof NativeFailure ? "native configure="+((NativeFailure)error).code : error.getClass().getSimpleName());
             throw error;
@@ -150,7 +148,7 @@ final class IdentityInstaller {
     private static synchronized void suspend(ModContext mod,IdentityRegistry registry) {
         if(!suspended){
             suspended=true;
-            resumeRetry=false;resumeAttempts=0;
+            resumeRecovery.stop();
             registry.setSuspended(true);
             armed=false;armedGeneration=-1;
             lastStart=null;
@@ -244,14 +242,16 @@ final class IdentityInstaller {
                     while (!Thread.currentThread().isInterrupted()) {
                         synchronized(IdentityInstaller.class){
                             if(!mod.enabled())suspend(mod,registry);
-                            else if(suspended || resumeRetry){
-                                if(!suspended && resumeAttempts>=MAX_RESUME_ATTEMPTS){
-                                    resumeRetry=false;
+                            else if(suspended || resumeRecovery.pending()){
+                                if(shutdownPending && !finishShutdown(mod)){
+                                    // Do not consume the configure budget while shutdown is blocked.
+                                }else if(!suspended && !resumeRecovery.canAttempt()){
+                                    resumeRecovery.stop();
                                     mod.log("CarPlay identity: automatic resume retries exhausted; next connection may retry");
                                 }else{
                                     try{apply(mod,app,registry);}
                                     catch(Throwable t){failure(mod,"CarPlay identity resume",t);}
-                                    if(resumeRetry)resumeAttempts++;
+                                    resumeRecovery.attempted();
                                 }
                             }else{
                                 if(shutdownPending)finishShutdown(mod);
