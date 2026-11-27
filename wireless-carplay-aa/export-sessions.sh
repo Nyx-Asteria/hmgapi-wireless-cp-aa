@@ -67,17 +67,7 @@ while true; do
         dest="$root/$usb_name/sessions"
         [ ! -L "$root/$usb_name" ] && [ ! -L "$dest" ] || continue
         mkdir -p "$dest" || continue
-        for src in "$source_dir"/session-*.log; do
-            [ -f "$src" ] && [ ! -L "$src" ] || continue
-            name=${src##*/}
-            [ ! -L "$dest/$name" ] && [ ! -L "$dest/$name.part" ] || continue
-            [ -f "$dest/$name" ] && cmp -s "$src" "$dest/$name" && continue
-            if cat "$src" > "$dest/$name.part" && cmp -s "$src" "$dest/$name.part"; then
-                mv "$dest/$name.part" "$dest/$name" || rm -f "$dest/$name.part"
-            else
-                rm -f "$dest/$name.part"
-            fi
-        done
+        # Java service owns finalized Java journals; this collector exports native logs only.
         for src in "$native_dir"/session-*.native.log*; do
             [ -f "$src" ] && [ ! -L "$src" ] || continue
             name=${src##*/}; base=${name%%.native.log*}
@@ -86,7 +76,7 @@ while true; do
             [ -f "$dest/$name" ] && continue
             # Native logs are explicitly opt-in and can contain personal device details.
             # Do not pretend to redact on firmware without the necessary tools.
-            if cat "$src" > "$dest/$name.part" && cmp -s "$src" "$dest/$name.part"; then
+            if cat "$src" > "$dest/$name.part" && cmp "$src" "$dest/$name.part" >/dev/null 2>&1; then
                 mv "$dest/$name.part" "$dest/$name" || rm -f "$dest/$name.part"
             else
                 rm -f "$dest/$name.part"

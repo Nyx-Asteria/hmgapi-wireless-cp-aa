@@ -14,6 +14,9 @@ for modern in (False, True):
         binpath = d / "bin"
         for f in (src, native, usb, binpath):
             f.mkdir(parents=True)
+        cmp = binpath / "cmp"
+        cmp.write_text('#!/bin/sh\ncase "$1" in -*) echo "cmp: invalid option" >&2; exit 2;; esac\nexec /usr/bin/cmp "$@"\n')
+        cmp.chmod(0o755)
         mounts = d / "mounts"
         mounts.write_text("")
         marker = src / "session-001.native-enabled"
@@ -51,7 +54,7 @@ for modern in (False, True):
         assert ("-T 200" in (d / "args").read_text()) == modern
         assert not (d / "premature").exists()
         assert (dest / "session-001.native.log").read_text() == "native\n"
-        assert (dest / "session-002.log").read_text() == "complete\n"
+        assert not (dest / "session-002.log").exists(), "Java journals belong to the Java exporter"
         assert not (dest / "session-003.active").exists()
         assert not list(native.glob("session-003*"))
         assert not list(dest.glob("*.part"))

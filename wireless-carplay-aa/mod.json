@@ -548,12 +548,12 @@
   },
   "services": [
     {
-      "name": "carplay-session-export",
-      "script": "export-sessions.sh",
+      "name": "wcp-session-export", "jar": "hooks.jar", "class": "hmgapi.mods.sessionexport.SessionExporter", "args": ["wcp"],
       "user": "root",
       "start": "android",
       "restart": true
-    }
+    },
+    {"name": "wcp-native-session-export", "script": "export-sessions.sh", "user": "root", "start": "android", "restart": true}
   ],
   "usb": [
     "WCP-LOGS"
