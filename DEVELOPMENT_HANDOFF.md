@@ -177,6 +177,9 @@ Parent cb21017554fcb6142709d6fd25224082f47dfea1. Actual readelf dependency/symbo
 ## Independent FileTransfer cycle — receiver SETUP dispatch verification
 Parent 219e88db53a2a2ef6aea1aab42a42820ad94438f. Re-extracted actual 1409 receiver and independently disassembled SETUP switch. Explicit cases 100/101/102/110; other values reach common skip/log path in this switch. No mapping from phone file channel to these numbers established. Transport research 60% estimate, protocol research 45%, runtime experiments 0%. Primary identity checkpoint remains 100%; previous CI [{"status":"in_progress","conclusion":null,"url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46069748770"}]. No CPUL edits or release.
 
+## Independent FileTransfer cycle — verified control delegate path
+Parent 89aab52999fda0801be0c764c912ff8cd7593b8e. Independently extracted receiver and disassembled Control plus PlatformControl entry. Identified gated +0x28 delegate invocation and fallback at 0x135c4; not evidence of unrestricted file-channel dispatch. Next resolve command comparisons and callback registration. Primary identity checkpoint unchanged, transport estimate 60% held, protocol 45%, experiments 0%. Prior CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46069859675"}]. No release or CPUL edits.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
