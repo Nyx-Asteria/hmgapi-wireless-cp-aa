@@ -182,7 +182,7 @@ final class IdentityInstaller {
         watcherStarted = true;
         Thread t = new Thread(new Runnable() {
             @Override public void run() {
-                int offers = 0, sends = 0;
+                int offers = 0, sends = 0, noPayload = 0, allocation = 0, stale = 0, lock = 0;
                 try {
                     while (mod.enabled()) {
                         refreshStart(mod, app, registry);
@@ -194,10 +194,14 @@ final class IdentityInstaller {
                                     mod.log("CarPlay identity: generation="+armedGeneration+" identification built; phone acceptance unconfirmed");
                                 }
                                 int o = NativeIdentity.startSessionStatus(0), n = NativeIdentity.startSessionStatus(1);
-                                if (o != offers || n != sends) {
+                                int p=NativeIdentity.startSessionStatus(3), a=NativeIdentity.startSessionStatus(4);
+                                int s=NativeIdentity.startSessionStatus(5), l=NativeIdentity.startSessionStatus(6);
+                                if (o != offers || n != sends || p != noPayload || a != allocation || s != stale || l != lock) {
                                     mod.log("CarPlayStart: availability offers=" + o + " answers attempted=" + n
+                                            + " no payload=" + p + " allocation failures=" + a
+                                            + " stale drops=" + s + " lock failures=" + l
                                             + " last result=" + NativeIdentity.startSessionStatus(2));
-                                    offers = o; sends = n;
+                                    offers=o; sends=n; noPayload=p; allocation=a; stale=s; lock=l;
                                 }
                             }
                         }

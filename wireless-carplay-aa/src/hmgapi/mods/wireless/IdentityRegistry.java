@@ -55,7 +55,9 @@ final class IdentityRegistry implements CarPlayIdentification {
         synchronized (this) {
             if (!vehicles.isEmpty() && !vehicles.containsKey(modId))
                 throw new IllegalStateException("CarPlay vehicle identity already belongs to " + vehicles.keySet());
-            vehicles.put(modId, new VehicleIdentity(vehicle.displayName,vehicle.engineType,vehicle.connectors)); invalidate(); notify = changed;
+            VehicleIdentity candidate=new VehicleIdentity(vehicle.displayName,vehicle.engineType,vehicle.connectors);
+            if(sameVehicle(vehicles.get(modId),candidate))return;
+            vehicles.put(modId,candidate); invalidate(); notify = changed;
         }
         if (notify != null) notify.run();
     }
@@ -65,7 +67,10 @@ final class IdentityRegistry implements CarPlayIdentification {
         checkModId(modId);
         log("API request from " + modId + ": remove vehicle identity");
         Runnable notify;
-        synchronized (this) { if(vehicles.remove(modId)!=null) invalidate(); notify = changed; }
+        synchronized (this) {
+            if(vehicles.remove(modId)==null)return;
+            invalidate(); notify = changed;
+        }
         if (notify != null) notify.run();
     }
 
@@ -83,6 +88,8 @@ final class IdentityRegistry implements CarPlayIdentification {
         synchronized (this) {
             if (!themes.isEmpty() && !themes.containsKey(modId))
                 throw new IllegalStateException("CarPlay theme identity already belongs to " + themes.keySet());
+            ThemeIdentity previous=themes.get(modId);
+            if(previous!=null && previous.encoded().equals(theme.encoded()) && sessionStart==start)return;
             themes.put(modId, theme); sessionStart = start; invalidate(); notify = changed;
         }
         if (notify != null) notify.run();
@@ -93,7 +100,10 @@ final class IdentityRegistry implements CarPlayIdentification {
         checkModId(modId);
         log("API request from " + modId + ": remove theme identity");
         Runnable notify;
-        synchronized (this) { if (themes.remove(modId) != null) { sessionStart = false; invalidate(); } notify = changed; }
+        synchronized (this) {
+            if(themes.remove(modId)==null)return;
+            sessionStart=false; invalidate(); notify = changed;
+        }
         if (notify != null) notify.run();
     }
 
@@ -122,6 +132,15 @@ final class IdentityRegistry implements CarPlayIdentification {
         Logger value;
         synchronized (this) { value = logger; }
         if (value != null) value.log(message);
+    }
+
+    private static boolean sameVehicle(VehicleIdentity a,VehicleIdentity b) {
+        if(a==null || !a.displayName.equals(b.displayName) || a.engineType!=b.engineType
+                || a.connectors.length!=b.connectors.length)return false;
+        for(int i=0;i<a.connectors.length;i++)
+            if(a.connectors[i].type!=b.connectors[i].type
+                    || a.connectors[i].maximumPowerW!=b.connectors[i].maximumPowerW)return false;
+        return true;
     }
 
     private static void checkModId(String modId) {

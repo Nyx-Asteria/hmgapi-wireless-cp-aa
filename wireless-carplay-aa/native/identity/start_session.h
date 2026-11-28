@@ -9,8 +9,9 @@
 typedef struct {u32 name,id,label,arg,notify,reply;} StartHandler;
 typedef int (*Blob)(unsigned char *,int,u32,u32,u32);
 static unsigned char start_msg[START_MAX];
-static u32 start_len,start_offers,start_sends;
+static u32 start_len,start_offers,start_sends,start_generation;
 static int start_last;
+static u32 start_no_payload,start_alloc_failed,start_stale,start_lock_failed;
 static Blob stock_sent_blob,stock_received_blob;
 static void *(*packet_create)(u32,u32);
 static void (*packet_destroy)(void *);
@@ -21,26 +22,64 @@ _Static_assert(sizeof(StartHandler)==24,"control dispatch ABI");
 
 static void start_clear_locked(void){
     start_len=0;
+    ++start_generation;
     for(u32 i=0;i<START_MAX;i++)start_msg[i]=0;
 }
 static u32 start_notify(u32 link,u32 session,const unsigned char *params,u32 n){
     (void)params;(void)n;
     __atomic_add_fetch(&start_offers,1,__ATOMIC_RELEASE);
-    unsigned char snapshot[START_MAX];u32 len=0;
-    if(lock_mutex(&identity_mutex))return 0;
+    unsigned char snapshot[START_MAX];u32 len=0,generation=0;
+    if(lock_mutex(&identity_mutex)){
+        __atomic_add_fetch(&start_lock_failed,1,__ATOMIC_RELEASE);
+        return 0;
+    }
     if(__atomic_load_n(&configured,__ATOMIC_ACQUIRE) && has_theme){
-        len=start_len;
+        len=start_len;generation=start_generation;
         for(u32 i=0;i<len;i++)snapshot[i]=start_msg[i];
     }
     unlock_mutex(&identity_mutex);
-    if(!len){__atomic_store_n(&start_last,-1,__ATOMIC_RELEASE);return 0;}
+    if(!len){__atomic_store_n(&start_last,-1,__ATOMIC_RELEASE);__atomic_add_fetch(&start_no_payload,1,__ATOMIC_RELEASE);return 0;}
     void *packet=packet_create(link,session);
-    if(!packet){__atomic_store_n(&start_last,-2,__ATOMIC_RELEASE);return 0;}
+    if(!packet){__atomic_store_n(&start_last,-2,__ATOMIC_RELEASE);__atomic_add_fetch(&start_alloc_failed,1,__ATOMIC_RELEASE);return 0;}
+    // Recheck after OEM allocation, before allocating or copying sensitive payload.
+    // Never hold the identity mutex across OEM packet allocation/send calls.
+    int current=0;
+    if(!lock_mutex(&identity_mutex)){
+        current=__atomic_load_n(&configured,__ATOMIC_ACQUIRE) && has_theme
+            && start_len==len && start_generation==generation;
+        unlock_mutex(&identity_mutex);
+    }else{
+        packet_destroy(packet);
+        __atomic_add_fetch(&start_lock_failed,1,__ATOMIC_RELEASE);
+        return 0;
+    }
+    if(!current){packet_destroy(packet);__atomic_store_n(&start_last,-4,__ATOMIC_RELEASE);__atomic_add_fetch(&start_stale,1,__ATOMIC_RELEASE);return 0;}
     unsigned char *buf=session_malloc(len,"carplaystart",1);
-    if(!buf){packet_destroy(packet);__atomic_store_n(&start_last,-3,__ATOMIC_RELEASE);return 0;}
-    for(u32 i=0;i<len;i++)buf[i]=snapshot[i];
+    if(!buf){packet_destroy(packet);__atomic_store_n(&start_last,-3,__ATOMIC_RELEASE);__atomic_add_fetch(&start_alloc_failed,1,__ATOMIC_RELEASE);return 0;}
+    // K5 fc7cb675: PacketDestroy frees the payload at offset 4 and then
+    // the packet. Attach before the final check so rejection has one owner.
     ((u32*)packet)[1]=(u32)buf;((u32*)packet)[2]=len;
+    if(lock_mutex(&identity_mutex)){
+        packet_destroy(packet);
+        __atomic_add_fetch(&start_lock_failed,1,__ATOMIC_RELEASE);
+        return 0;
+    }
+    current=__atomic_load_n(&configured,__ATOMIC_ACQUIRE) && has_theme
+        && start_len==len && start_generation==generation;
+    if(current)for(u32 i=0;i<len;i++)buf[i]=snapshot[i];
+    unlock_mutex(&identity_mutex);
+    if(!current){
+        packet_destroy(packet);
+        __atomic_store_n(&start_last,-4,__ATOMIC_RELEASE);
+        __atomic_add_fetch(&start_stale,1,__ATOMIC_RELEASE);
+        return 0;
+    }
+    // No OEM dispatch under the identity mutex. A withdrawal after this
+    // admission point cannot revoke an already admitted response.
     int rc=send_packet(packet);
+    // Verified K5 fc7cb675: zero means the packet was never handed to
+    // the OEM send callback. Nonzero means ownership may have transferred.
+    if(rc==0)packet_destroy(packet);
     __atomic_store_n(&start_last,rc,__ATOMIC_RELEASE);
     __atomic_add_fetch(&start_sends,1,__ATOMIC_RELEASE);
     return 0;
@@ -67,11 +106,14 @@ static void start_bind(void *lib){
     handlers=dlsym(lib,"iAP2CtlHandleMsgFuncList");
 }
 static int start_configure(const unsigned char *msg,u32 len){
-    if(len>START_MAX || (len && (len<6 || msg[0]!=0x40 || msg[1]!=0x40
-       || ((u32)msg[2]<<8|msg[3])!=len || msg[4]!=0x43 || msg[5]!=0x01)))return -12;
     if(!lock_mutex || !unlock_mutex)return len?-18:0;
     if(lock_mutex(&identity_mutex))return -15;
+    // A rejected replacement must not leave a previous session payload armed.
     start_clear_locked();
+    if(len>START_MAX || (len && (!msg || len<6 || msg[0]!=0x40 || msg[1]!=0x40
+       || ((u32)msg[2]<<8|msg[3])!=len || msg[4]!=0x43 || msg[5]!=0x01))){
+        unlock_mutex(&identity_mutex);return -12;
+    }
     if(!len){unlock_mutex(&identity_mutex);return 0;}
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE) || !has_theme || !handlers
        || !packet_create || !packet_destroy || !session_malloc || !send_packet || !root_table){

@@ -41,6 +41,40 @@ static u32 build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 count,const cha
 }
 static int mutex(void *p){(void)p;return 0;}
 static int protect(void *p,u32 n,int flags){(void)p;(void)n;(void)flags;return 0;}
+static u32 fixture_packet[3],fixture_destroyed,fixture_malloc_calls;
+static unsigned char fixture_payload[START_MAX];
+static u32 fixture_payload_destroyed,fixture_sent;
+static void *fixture_create_plain(u32 link,u32 session){
+    (void)link;(void)session;
+    fixture_packet[1]=fixture_packet[2]=0;
+    return fixture_packet;
+}
+static void *fixture_malloc_withdraw(u32 n,const char *name,u32 flag){
+    (void)n;(void)name;(void)flag;
+    start_configure(0,0);
+    return fixture_payload;
+}
+static int fixture_send_result=1;
+static int fixture_send(void *p){(void)p;fixture_sent++;return fixture_send_result;}
+static void *fixture_malloc_plain(u32 n,const char *name,u32 flag){
+    (void)n;(void)name;(void)flag;return fixture_payload;
+}
+static void *fixture_create(u32 link,u32 session){
+    (void)link;(void)session;
+    // Model a configuration withdrawal during OEM allocation.
+    start_configure(0,0);
+    return fixture_packet;
+}
+static void fixture_destroy(void *p){
+    if(p==fixture_packet){
+        fixture_destroyed++;
+        if(fixture_packet[1]==(u32)fixture_payload)fixture_payload_destroyed++;
+        fixture_packet[1]=fixture_packet[2]=0;
+    }
+}
+static void *fixture_malloc(u32 n,const char *name,u32 flag){
+    (void)n;(void)name;(void)flag;fixture_malloc_calls++;return 0;
+}
 static void semihost(u32 operation,const void *argument);
 int test_main(void){
     root[0]=parameter(20,13);root[0].children=(u32)identity_children;
@@ -71,6 +105,46 @@ int test_main(void){
     result|=configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=5;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     if(configure("Kia K5",6,0,0,235000,2,10900,"",0,0)!=-12)result|=1;
+    /* Rejecting malformed replacements must erase the old native payload. */
+    static const unsigned char invalid[]={0x40,0x40,0,6,0x43,0};
+    start_len=6;for(u32 i=0;i<6;i++)start_msg[i]=0x55;
+    if(start_configure(invalid,sizeof(invalid))!=-12 || start_len)result|=1;
+    for(u32 i=0;i<START_MAX;i++)if(start_msg[i])result|=1;
+    start_len=6;start_msg[0]=0x55;
+    if(start_configure(0,6)!=-12 || start_len || start_msg[0])result|=1;
+    start_len=6;start_msg[0]=0x55;
+    if(start_configure(0,0)!=0 || start_len || start_msg[0])result|=1;
+    /* JNI null input takes the invalidation path without touching JNIEnv. */
+    start_len=6;start_msg[0]=0x55;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSession(0,0,0)!=-12 || start_len || start_msg[0])result|=1;
+    start_len=6;start_msg[0]=0x55;
+    if(start_configure(0,START_MAX+1)!=-12 || start_len || start_msg[0])result|=1;
+    // Invalidation during packet creation must suppress the obsolete response.
+    packet_create=fixture_create;packet_destroy=fixture_destroy;session_malloc=fixture_malloc;
+    start_len=6;start_msg[0]=0x40;
+    u32 before=start_sends;
+    start_notify(1,2,0,0);
+    if(fixture_destroyed!=1 || fixture_malloc_calls || start_sends!=before || start_last!=-4 || start_stale!=1)result|=1;
+    start_notify(1,2,0,0);
+    if(start_no_payload!=1 || start_sends!=before || start_last!=-1)result|=1;
+    // Withdrawal during payload allocation must destroy the populated packet,
+    // without copying the obsolete payload or calling the OEM send routine.
+    packet_create=fixture_create_plain;session_malloc=fixture_malloc_withdraw;send_packet=fixture_send;
+    start_len=6;start_msg[0]=0x40;fixture_payload[0]=0x55;
+    start_notify(1,2,0,0);
+    if(fixture_destroyed!=2 || fixture_payload_destroyed!=1 || fixture_sent
+       || start_sends!=before || start_stale!=2 || start_last!=-4 || fixture_payload[0]!=0x55)result|=1;
+    // Zero means dispatch refusal: caller still owns the packet.
+    session_malloc=fixture_malloc_plain;fixture_send_result=0;
+    start_len=6;start_msg[0]=0x40;
+    start_notify(1,2,0,0);
+    if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=1
+       || start_sends!=before+1 || start_last!=0 || fixture_payload[0]!=0x40)result|=1;
+    // Nonzero means the OEM callback took the packet; do not destroy it.
+    fixture_send_result=1;
+    start_notify(1,2,0,0);
+    if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=2
+       || start_sends!=before+2 || start_last!=1)result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";

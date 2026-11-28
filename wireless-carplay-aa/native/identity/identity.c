@@ -195,10 +195,14 @@ JNIEXPORT void JNICALL Java_hmgapi_mods_wireless_NativeIdentity_shutdown(JNIEnv 
     if(hook_mailbox)set_handler(0);
 }
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSession(JNIEnv *env,jclass cls,jbyteArray message){
-    (void)cls;if(!message)return -12;jsize n=(*env)->GetArrayLength(env,message);
-    if(n>START_MAX)return -12;unsigned char bytes[START_MAX];
+    (void)cls;
+    // Route every rejected JNI replacement through the same native invalidation path.
+    if(!message)return start_configure(0,1);
+    jsize n=(*env)->GetArrayLength(env,message);
+    if((*env)->ExceptionCheck(env) || n<0 || n>START_MAX)return start_configure(0,1);
+    unsigned char bytes[START_MAX];
     if(n)(*env)->GetByteArrayRegion(env,message,0,n,(jbyte*)bytes);
-    if((*env)->ExceptionCheck(env))return -12;
+    if((*env)->ExceptionCheck(env))return start_configure(0,1);
     return start_configure(bytes,(u32)n);
 }
 JNIEXPORT jboolean JNICALL Java_hmgapi_mods_wireless_NativeIdentity_identityBuilt(JNIEnv *env,jclass cls){
@@ -210,6 +214,10 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStat
     if(which==0)return (int)__atomic_load_n(&start_offers,__ATOMIC_ACQUIRE);
     if(which==1)return (int)__atomic_load_n(&start_sends,__ATOMIC_ACQUIRE);
     if(which==2)return __atomic_load_n(&start_last,__ATOMIC_ACQUIRE);
+    if(which==3)return (int)__atomic_load_n(&start_no_payload,__ATOMIC_ACQUIRE);
+    if(which==4)return (int)__atomic_load_n(&start_alloc_failed,__ATOMIC_ACQUIRE);
+    if(which==5)return (int)__atomic_load_n(&start_stale,__ATOMIC_ACQUIRE);
+    if(which==6)return (int)__atomic_load_n(&start_lock_failed,__ATOMIC_ACQUIRE);
     return -1;
 }
 void __aeabi_memclr(void *dest,u32 n){volatile unsigned char *p=dest;while(n--)*p++=0;}
