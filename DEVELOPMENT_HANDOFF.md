@@ -1,11 +1,42 @@
-# WCP — RC7 final candidate / next-cycle handoff
-Updated 2026-11-27. Current branch: rc7-final. Read this file first in a fresh chat. Obtain the exact current revision with git rev-parse HEAD; do not treat estimates as CI or vehicle evidence. Update DEVELOPMENT_HANDOFF.md in every commit, including fixes and release consolidation.
+# WCP — 3.0.0 development handoff
+
+Updated 2026-11-27. Active development branch: `3.0.0`. Frozen preceding candidate: `rc7-final` at `973c14ec3a2d169adda665a8ee65b3f347e6e20a`.
+
+## Start here — instructions for a fresh development chat
+
+- This is the Wireless CarPlay (WCP) workstream, not CPUL. The owner runs separate chats for separate repositories. Verify branch HEAD, read this file and inspect actual source/tests before editing. Do not modify other repositories unless explicitly requested.
+- `3.0.0` is the new development branch, not a published package or a version bump. Current manifest remains 2.2.1-rc.7 until the next release preparation. The owner is leaning toward plain patch versions (3.0.0, 3.0.1, …), not a finalized change to the package/release policy.
+- The previous cycle is implementation-complete and consolidated. Fresh consolidated CI is still unverified through this connector; original candidate CI passed. Do not restart completed logging/identity work just because historical status documents contain old percentages. Vehicle testing is a separate gate, not included in implementation progress.
+- Update this living handoff in the SAME commit as every development change. State files changed, rationale, actual tests/results, exact source pins, limitations and next concrete action. Keep it current and concise; link historical evidence rather than accumulating an enormous diary. Use meaningful architectural commits, preserve rollback/history, never force-push main or rewrite a published tag.
+- On a "keep going" instruction, perform a bounded, substantive development cycle on this branch, commit it with the handoff and report actual progress. Do not claim that a build, publication or background task happened without evidence. Report implementation estimates separately from CI and vehicle evidence.
+- For coordinated releases, CPUL determines the version train. Unchanged companions may skip releases and adopt the current train version when next released. Preserve mod IDs, permanent signing identity and independently versioned external dependencies. Successful coordinated release builds may publish automatically when authorized; ordinary development pushes must not publish. Full changelogs, nondraft releases, exact-tree consolidation, fresh CI and verified signed package provenance remain required.
+- Target vehicle: 2022 Kia K5 EX, US Gen5W_M DL322 260507, Android 4.4.2/API 19, HMG-API RC10 floor and Nemesis 1.17.1. Do not claim other vehicles or firmware are verified.
+
+## Frozen coordinated source pins
+
+| Component | Branch | Exact consolidated source |
+| --- | --- | --- |
+| WCP | rc7-final | 973c14ec3a2d169adda665a8ee65b3f347e6e20a |
+| STBT | rc4-final | 42a07f52821ee3cfbde71bb6bf2b5a457b150b5f |
+| CPUL | rc11-final (original release commit) | 162054a27c492fc421a0cc5e88087b92aede538b |
+| PPS | prior audited source | bd57be364d95d9542b5aaf81269fa2b8dc1d35e2 |
+| HMG-API | RC10 pinned SDK | daa083717f07565ba16dc8a4d26291b7d68d3bf4 |
+
+CPUL's original release tag resolves to the original-pin release commit above, not the consolidated companion hashes. Verify actual published assets before any further release action. Do not silently replace assets. On the companion consolidated branches only DEVELOPMENT_HANDOFF.md and CI push branch allowlist differ from the original green trees; restoring both blobs reproduced the exact originals. Historical candidates remain unchanged.
+
+## First 3.0.0 cycle priorities
+
+1. Establish exact release/CI status for both frozen companion candidates; ask for a run URL only if push-run discovery is unavailable. The new 3.0.0 branch must not delay or mutate the frozen RC release candidates.
+2. Review RC11 vehicle test evidence when available: prioritize reproducible regressions and correlate CPUL/WCP/STBT session logs by session and generation. Keep known-working wireless reconnect, standard fallback, native apps/sidebars and Apple/Google guidance intact.
+3. Confirm shared version format before changing package manifests or installer/release metadata; audit upgrade semantics and enable ordinary branch CI for future code changes without enabling automatic release on this branch.
+4. Investigate the unresolved FileTransfer UUID/transport boundary using actual CoreMedia evidence and CPUL passive discovery; no live experimental acceptance or capability advertisement until exact protocol and ownership are established.
+5. Reuse existing private firmware/IPSW archives and session logs; collect only missing files or fields. Do not include secrets, private captures or raw identifiers in commits.
 
 ## Current state
 - Version 2.2.1-rc.7, package ID wireless-carplay-aa. HMG-API floor >=1.1.0-rc.10; permanent author keys and release workflow unchanged.
 - Original development head 3c3d2489b5bd4b8f4b8d37a5a451341701f78bce, branch k5-log2-cleanup retained with all 110 RC7 commits and their full historical handoffs ([history](https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/blob/3c3d2489b5bd4b8f4b8d37a5a451341701f78bce/DEVELOPMENT_HANDOFF.md)). Its final CI [46090592763](https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46090592763) passed pin, production mod and journal jobs. Fresh consolidated CI required; do not reuse the original CI as proof of the new commit.
-- Reconstructed RC6 baseline e07dbe1c185067571e4dbee51c69cb0865753c8f, original RC6 4885b9fd7c05c2755aad6b32d8fdc15b5bddb0c6. Both exact Git trees 8319df4b6bb7011b9ae4f5111cc82aee64d06072. New RC7 history contains 21 architectural milestones, chronological snapshots rather than path-isolated cherry-picks; no intermediate fresh test claims. Original tree 3893d65d63b803fae947f6ae185fd63102c527f6; the only intentional final differences are this handoff and adding rc7-final to the CI push branch allowlist. The final verification restores both original blobs and requires exact original tree equivalence before pushing. No feature, package version, ID, release notes, signing or runtime changes. No new tag or publication by consolidation.
-- STBT original RC4 candidate fac2ec367028a97334d548c53d5930d768ec2694 passed CI 46090509762; its separate consolidation must be verified independently. CPUL original RC11 release commit 162054a27c492fc421a0cc5e88087b92aede538b uses original green companion pins. CPUL tag v1.0.0-rc.11 already resolves to that commit; verify actual release assets separately. Never rewrite existing tags or silently replace release assets. Provide consolidated SHAs/tree evidence/CI to CPUL and coordinate future builds.
+- Reconstructed RC6 baseline e07dbe1c185067571e4dbee51c69cb0865753c8f, original RC6 4885b9fd7c05c2755aad6b32d8fdc15b5bddb0c6. Both exact Git trees 8319df4b6bb7011b9ae4f5111cc82aee64d06072. New RC7 history contains 21 architectural milestones, chronological snapshots rather than path-isolated cherry-picks; no intermediate fresh test claims. Original tree 3893d65d63b803fae947f6ae185fd63102c527f6; the only intentional final differences are this handoff and adding rc7-final to the CI push branch allowlist. Restoring both original blobs reproduced the exact original tree before the candidate branch was pushed. No feature, package version, ID, release notes, signing or runtime changes. No new tag or publication by consolidation.
+- STBT original RC4 candidate fac2ec367028a97334d548c53d5930d768ec2694 passed CI 46090509762; STBT consolidated at 42a07f52821ee3cfbde71bb6bf2b5a457b150b5f; tree equivalence verified independently, fresh CI pending. CPUL original RC11 release commit 162054a27c492fc421a0cc5e88087b92aede538b uses original green companion pins. CPUL tag v1.0.0-rc.11 already resolves to that commit; verify actual release assets separately. Never rewrite existing tags or silently replace release assets. Provide consolidated SHAs/tree evidence/CI to CPUL and coordinate future builds.
 
 ## Implementation checkpoint
 1. Persistent categorized session directories, bounded pre-session events, SHA-256 fallback, mounted USB verification, atomic markers, queue/finalization isolation, retry/retention and recorder health are implemented and passed original candidate CI. Preserve session-end USB exports and historical evidence.
