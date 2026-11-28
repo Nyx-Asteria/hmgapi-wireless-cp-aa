@@ -22,6 +22,7 @@ static Mutex lock_mutex,unlock_mutex;
 static u32 identity_mutex;
 static int configured,has_vehicle,has_theme,legacy_theme,has_ev;
 static u32 identity_built, identity_seen, identity_evidence;
+/* 0: not selected, 1: accepted, -1: rejected. */
 static int theme_children_active;
 /* Process-lifetime counters; no payloads or addresses. */
 static u32 diag[8];
@@ -63,7 +64,7 @@ static void *info_value(u16 id,u16 type,u16 *n,void *key,int *more){
 }
 static void *status_value(u16 id,u16 type,u16 *n,void *key,int *more){return status_lookup(id,type,n,key,more);}
 static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
-    if(theme_children_active && (id==6 || (legacy_theme && id==5))){
+    if((theme_children_active==1 || (theme_children_active==0 && !(rc7_mode&1))) && (id==6 || (legacy_theme && id==5))){
         if(id==6){identity_seen|=2;tick(5);}
         if(more)*more=0;return theme;
     }
@@ -78,7 +79,7 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
     if(id==WIRELESS_GROUP && stock_children){
         theme_children_active=0;
         u16 n=0;const Param *stock=stock_children(id,type,&n,key,more);
-        if(!stock || n>WIRELESS_MAX){*count=n;return stock;}
+        if(!stock || n>WIRELESS_MAX){theme_children_active=-1;*count=n;return stock;}
         theme_children_active=1;tick(4);
         /* Legacy K5 format owns parameters 5/6; asset-only mode owns
            parameter 6 and leaves stock parameter 5 intact. Replace rather

@@ -1,3 +1,11 @@
+# RC9 corrected vehicle assessment and fixture placement
+
+User reports subsequent Ultra Sidebars launch failed entirely; prior slow launch was an outlier, not reliable fallback. More logs expected. Seat heating anomaly belongs to CPU RC12 unless evidence links it to WCP; not reviewed here. CI 46162012163 fully passed. CI 46162273959 mod and pin passed, journal failed compiling fixture because early lookup assertion was inserted before legacy declaration. Move assertion to intended legacy block; production code unchanged. Amend original callback commit rather than append fix commit. Fresh CI required.
+
+# RC9 legacy callback ordering compatibility
+
+Parent 22067da5a9d9893b1632928fd7990e0e2be30ea7. CI 46162012163 pin and journal (including ARM identity harness) passed; mod job still running at inspection. Restore RC6 early theme lookup only in legacy fixed-callback mode before child selection; explicit rejected child table remains stock fallback, opt-in callback mode remains selection-gated. Three-state selection replaces boolean. Tests cover early legacy lookup and rejected-table fallback. Early lookup is lookup evidence only, not proof of delivery; OEM callback order and vehicle causality remain unverified. Fresh CI required. API v3 unchanged. No release or companion changes.
+
 # RC9 legacy capability sizing and CI activation
 
 Parent 19c02b73a16710a7572a489cbd37ab70f0014a67. Branch verified at parent; Actions branch query returned no runs because CI push allowlist omitted rc9-recovery. Add branch to existing CI, no release trigger. Correct legacy capability append: 1024-byte scratch limit belongs only to opt-in duplicate probe; legacy append uses caller capacity, retains even-length validation, armed payload requirement, signed overflow guard and capacity checks. Add ARM fixtures for >1024 sizing, short buffer and overflow; existing probe fixtures unchanged. This is a concrete compatibility correction, not proof of vehicle root cause. No tests executed yet; fresh CI required. API v3 unchanged, no companion edits. Next inspect CI and native callback ordering.

@@ -195,7 +195,7 @@ int test_main(void){
     // the configured theme through the lookup wrapper.
     identity_seen=0;stock_wireless_count=WIRELESS_MAX+1;
     children=identity_children(24,13,&child_count,0,&more);
-    if(children!=stock_wireless || child_count!=WIRELESS_MAX+1 || theme_children_active
+    if(children!=stock_wireless || child_count!=WIRELESS_MAX+1 || theme_children_active!=-1
        || wireless_value(6,10,&child_count,0,&more)!=&value || (identity_seen&2))FAIL_CHECK();
     // Preserve the actual OEM root callback and metadata on fallback.
     build_lookup=alternate_root;
@@ -218,6 +218,9 @@ int test_main(void){
     rc7_mode=0;build_lookup=alternate_root;identity_seen=0;more=99;
     Lookup legacy=(Lookup)identity_value(24,13,&child_count,0,&more);
     if(legacy!=wireless_value || more!=0)FAIL_CHECK();
+    theme_children_active=0;
+    if(legacy(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))FAIL_CHECK();
+    identity_seen=0;
     children=identity_children(24,13,&child_count,0,&more);
     if(child_count!=4 || children[2].id!=5 || children[3].id!=6
        || legacy(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))FAIL_CHECK();
@@ -225,6 +228,9 @@ int test_main(void){
     stock_wireless_count=4;
     children=identity_children(24,13,&child_count,0,&more);
     if(child_count!=6 || children[4].id!=5 || children[5].id!=6)FAIL_CHECK();
+    stock_wireless_count=WIRELESS_MAX+1;identity_seen=0;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(children!=stock_wireless || legacy(6,10,&child_count,0,&more)!=&value || (identity_seen&2))FAIL_CHECK();
     stock_wireless_count=2;build_lookup=0;rc7_mode=7;
     // Native tuple parser mirrors the Java API, including uint32 bounds.
     if(!theme_tuple_ok("THEME1:985:19.0",sizeof("THEME1:985:19.0")-1)
