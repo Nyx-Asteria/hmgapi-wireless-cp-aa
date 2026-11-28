@@ -337,9 +337,15 @@ int test_main(void){
     if(configure("Kia EV6",7,2,0,235000,2,10900,"",0,0)!=-24)FAIL_CHECK();
     if(configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || has_ev)FAIL_CHECK();
     status_table=stock_status;
+    // Diagnostic counters distinguish matching builds from bypass and lock failure.
+    u32 calls=diag[0], bypass=diag[1], admitted=diag[3], locks=diag[2];
+    raw_builder=fallback_build;
+    identity_builder(0,0,0,0,0x1d01,root,23,"identity",root_values);
+    if(diag[0]!=calls+1 || diag[1]!=bypass+1 || diag[3]!=admitted)FAIL_CHECK();
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,10)!=(jint)diag[0])FAIL_CHECK();
     // A busy or failed identity lock cannot prevent stock identification.
     raw_builder=fallback_build;lock_mutex=mutex_fail;
-    if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)FAIL_CHECK();
+    if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1 || diag[2]!=locks+1)FAIL_CHECK();
     raw_builder=build;lock_mutex=mutex;
     // Ambiguous capability tables must not arm the optional session handler.
     static StartHandler fixture_handlers[34];

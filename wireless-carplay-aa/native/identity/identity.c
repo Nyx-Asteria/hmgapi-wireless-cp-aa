@@ -23,6 +23,9 @@ static u32 identity_mutex;
 static int configured,has_vehicle,has_theme,legacy_theme,has_ev;
 static u32 identity_built, identity_seen, identity_evidence;
 static int theme_children_active;
+/* Process-lifetime counters; no payloads or addresses. */
+static u32 diag[8];
+static void tick(unsigned i){__atomic_add_fetch(&diag[i],1,__ATOMIC_RELAXED);}
 /* Restart-scoped opt-ins; set before first configure. Host fixtures opt in explicitly. */
 static unsigned int rc7_mode;
 static char display_name[321];
@@ -61,7 +64,7 @@ static void *info_value(u16 id,u16 type,u16 *n,void *key,int *more){
 static void *status_value(u16 id,u16 type,u16 *n,void *key,int *more){return status_lookup(id,type,n,key,more);}
 static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
     if(theme_children_active && (id==6 || (legacy_theme && id==5))){
-        if(id==6)identity_seen|=2;
+        if(id==6){identity_seen|=2;tick(5);}
         if(more)*more=0;return theme;
     }
     return ((rc7_mode&1) && stock_wireless_lookup?stock_wireless_lookup:wireless_lookup)(id,type,n,key,more);
@@ -76,7 +79,7 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
         theme_children_active=0;
         u16 n=0;const Param *stock=stock_children(id,type,&n,key,more);
         if(!stock || n>WIRELESS_MAX){*count=n;return stock;}
-        theme_children_active=1;
+        theme_children_active=1;tick(4);
         /* Legacy K5 format owns parameters 5/6; asset-only mode owns
            parameter 6 and leaves stock parameter 5 intact. Replace rather
            than append duplicate IDs if the OEM already supplies them. */
@@ -112,11 +115,14 @@ static void *identity_value(u16 id,u16 type,u16 *n,void *key,int *more){
 }
 static Param parameter(u16 id,u16 type){Param p={1,id,type,0,0,0,0,0};return p;}
 static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void *table,u32 count,const char *name,Lookup lookup){
-    if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE) || command!=0x1d01 || table!=root_table || count!=24)
+    if(command==0x1d01)tick(0);
+    if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE) || command!=0x1d01 || table!=root_table || count!=24){
+        if(command==0x1d01)tick(1);
         return raw_builder(handle,session,a,b,command,table,count,name,lookup);
-    if(lock_mutex(&identity_mutex))return raw_builder(handle,session,a,b,command,table,count,name,lookup);
+    }
+    if(lock_mutex(&identity_mutex)){tick(2);return raw_builder(handle,session,a,b,command,table,count,name,lookup);}
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){unlock_mutex(&identity_mutex);return raw_builder(handle,session,a,b,command,table,count,name,lookup);}
-    identity_seen=0;theme_children_active=0;start_capability_seen=0;
+    tick(3);identity_seen=0;theme_children_active=0;start_capability_seen=0;
     stock_children=0;stock_wireless_lookup=0;build_lookup=lookup;
     Param root[24];for(u32 i=0;i<24;i++){
         root[i]=root_table[i];
@@ -128,6 +134,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
         }
     }
     u32 result=raw_builder(handle,session,a,b,command,root,24,name,identity_value);
+    if(!result)tick(6);
     __atomic_store_n(&start_capability_built,result && start_len?start_capability_seen:0,__ATOMIC_RELEASE);
     /* A selected child table alone is not evidence of serialized identity. */
     u32 required=(has_vehicle?5:0)|(has_theme?2:0);
@@ -207,7 +214,7 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
         if(!wireless_lookup || !theme_tuple_ok(theme_id,theme_len))return wireless_lookup?-12:-18;
     }
     if(lock_mutex(&identity_mutex))return -15;
-    start_clear_locked();
+    tick(7);start_clear_locked();
     __atomic_store_n(&identity_built,0,__ATOMIC_RELEASE);
     __atomic_store_n(&identity_evidence,0,__ATOMIC_RELEASE);
     has_vehicle=vehicle;has_ev=ev;has_theme=themed;legacy_theme=themed && legacy;
@@ -306,6 +313,7 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStat
     if(which==6)return (int)__atomic_load_n(&start_lock_failed,__ATOMIC_ACQUIRE);
     if(which==7)return (int)__atomic_load_n(&start_dispatched,__ATOMIC_ACQUIRE);
     if(which==8)return (int)__atomic_load_n(&start_refused,__ATOMIC_ACQUIRE);
+    if(which>=10 && which<18)return (jint)__atomic_load_n(&diag[which-10],__ATOMIC_RELAXED);
     if(which==9)return __atomic_load_n(&configured,__ATOMIC_ACQUIRE)?(int)__atomic_load_n(&start_capability_built,__ATOMIC_ACQUIRE):0;
     return -1;
 }

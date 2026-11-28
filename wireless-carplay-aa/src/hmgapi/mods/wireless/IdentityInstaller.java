@@ -258,6 +258,7 @@ final class IdentityInstaller {
         Thread t = new Thread(new Runnable() {
             @Override public void run() {
                 int offers = 0, sends = 0, noPayload = 0, allocation = 0, stale = 0, lock = 0, dispatched = 0, refused = 0;
+                String lastBuilderCounters="";
                 int evidence=-1, capabilityEvidence=-1;long evidenceGeneration=-1;
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
@@ -281,6 +282,12 @@ final class IdentityInstaller {
                         }
                         synchronized (IdentityInstaller.class) {
                             if (loaded) {
+                                String counters="identification calls="+NativeIdentity.startSessionStatus(10)
+                                    +" bypass="+NativeIdentity.startSessionStatus(11)+" lock failures="+NativeIdentity.startSessionStatus(12)
+                                    +" admitted="+NativeIdentity.startSessionStatus(13)+" theme tables="+NativeIdentity.startSessionStatus(14)
+                                    +" theme lookups="+NativeIdentity.startSessionStatus(15)+" builder failures="+NativeIdentity.startSessionStatus(16)
+                                    +" configurations="+NativeIdentity.startSessionStatus(17);
+                                if(!counters.equals(lastBuilderCounters)){log(mod,"RC9 native builder: "+counters);lastBuilderCounters=counters;}
                                 int observed=NativeIdentity.negotiationEvidence();
                                 if(armed && observed>=0 && registry.identityStatus().readiness==CarPlayIdentification.Readiness.ARMED
                                         && (observed&64)!=0
