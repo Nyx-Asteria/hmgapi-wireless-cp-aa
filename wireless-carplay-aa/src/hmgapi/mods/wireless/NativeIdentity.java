@@ -8,8 +8,10 @@ final class NativeIdentity {
     static void load() { System.load("/system/lib/libcarplayidentity.so"); }
     static native int configure(byte[] displayName, int engineType, int dcConnector,
             int dcPowerW, int acConnector, int acPowerW, byte[] themeIdentity, boolean legacyTheme);
-    static native void shutdown();
+    static native int shutdown();
     static native boolean identityBuilt();
+    // Most recent successful builder: engine=1, theme=2, name=4.
+    static native int identityEvidence();
     static native int startSession(byte[] message);
     static native int startSessionStatus(int which);
 }

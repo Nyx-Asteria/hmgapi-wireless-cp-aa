@@ -48,7 +48,9 @@ static u32 build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 count,const cha
     (void)h;(void)s;(void)a;(void)b;(void)cmd;(void)name;at=0;output[slot][0]=0;walk(table,count,lookup,0);return 1;
 }
 static int mutex(void *p){(void)p;return 0;}
-static int protect(void *p,u32 n,int flags){(void)p;(void)n;(void)flags;return 0;}
+static int protect_fail;
+static int protect(void *p,u32 n,int flags){(void)p;(void)n;(void)flags;return protect_fail;}
+static int mutex_fail(void *p){(void)p;return 1;}
 static u32 fixture_packet[3],fixture_destroyed,fixture_malloc_calls;
 static unsigned char fixture_payload[START_MAX];
 static u32 fixture_payload_destroyed,fixture_sent;
@@ -83,6 +85,14 @@ static void fixture_destroy(void *p){
 static void *fixture_malloc(u32 n,const char *name,u32 flag){
     (void)n;(void)name;(void)flag;fixture_malloc_calls++;return 0;
 }
+static int fixture_blob_size=4;
+static unsigned char fixture_blob_bytes[4]={0x1d,0x01,0x43,0x01};
+static int fixture_blob(unsigned char *buf,int cap,u32 id,u32 x,u32 y){
+    (void)id;(void)x;(void)y;
+    if(buf && cap>=fixture_blob_size && fixture_blob_size>=0 && fixture_blob_size<=4)
+        for(int i=0;i<fixture_blob_size;i++)buf[i]=fixture_blob_bytes[i];
+    return fixture_blob_size;
+}
 static void semihost(u32 operation,const void *argument);
 int test_main(void){
     root[0]=parameter(20,13);root[0].children=(u32)identity_children;
@@ -98,11 +108,11 @@ int test_main(void){
     lock_mutex=mutex;unlock_mutex=mutex;protect_page=protect;hook_mailbox=&mailbox;
     result=configure("Kia EV6",7,2,0,235000,2,10900,"",0,0);slot=0;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
-    if(!identity_built)result|=1;
+    if(!identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)!=5)result|=1;
     result|=configure("Kia EV6",7,2,0,235000,2,10900,"THEME1:985:19.0",15,0);slot=1;
-    if(identity_built)result|=1;
+    if(identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0))result|=1;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
-    if(!identity_built)result|=1;
+    if(!identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)!=7)result|=1;
     result|=configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,0);slot=2;
     if(identity_built)result|=1;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
@@ -148,11 +158,17 @@ int test_main(void){
     // Preserve the actual OEM root callback and metadata on fallback.
     build_lookup=alternate_root;
     more=0;
-    if(identity_value(24,13,&child_count,0,&more)!=(void*)alternate_wireless || more!=3)result|=1;
+    Lookup early=(Lookup)identity_value(24,13,&child_count,0,&more);
+    if(early!=wireless_value || more!=3)result|=1;
+    if(early(6,10,&child_count,0,&more)!=&value || more!=7 || (identity_seen&2))result|=1;
     stock_wireless_count=4;
     children=identity_children(24,13,&child_count,0,&more);
-    if(!children || identity_value(24,13,&child_count,0,&more)!=(void*)wireless_value)result|=1;
-    if(wireless_value(0,5,&child_count,0,&more)!=&value || more!=7)result|=1;
+    if(!children || early(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))result|=1;
+    if(early(0,5,&child_count,0,&more)!=&value || more!=7)result|=1;
+    stock_wireless_count=WIRELESS_MAX+1;
+    identity_seen=0;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(children!=stock_wireless || early(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
     build_lookup=0;stock_wireless_lookup=0;
     stock_wireless_count=2;
     // Native tuple parser mirrors the Java API, including uint32 bounds.
@@ -166,6 +182,28 @@ int test_main(void){
        || theme_tuple_ok("A:1:",4)
        || theme_tuple_ok("A.B:1:1",7)
        || theme_tuple_ok("A:1:1:2",7))result|=1;
+    // Preserve OEM capability IDs; append only while a response is armed.
+    unsigned char capabilities[8]={0};
+    start_len=6;start_capability_seen=0;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=6 || start_capability_seen)result|=1;
+    if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=4
+       || capabilities[0]!=0x1d || capabilities[1]!=1 || capabilities[2]!=0x43 || capabilities[3]!=1 || start_capability_seen!=1)result|=1;
+    if(start_append(fixture_blob,capabilities,8,0,0,0,0)!=6
+       || capabilities[4]!=0x43 || capabilities[5]!=0 || start_capability_seen!=3)result|=1;
+    if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)result|=1;
+    fixture_blob_size=3;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=3
+       || start_append(fixture_blob,capabilities,8,0,0,0,1)!=3)result|=1;
+    fixture_blob_size=-1;
+    if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=-1)result|=1;
+    fixture_blob_size=2147483647;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=2147483647)result|=1;
+    fixture_blob_size=4;__atomic_store_n(&start_capability_built,3,__ATOMIC_RELEASE);
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=3)result|=1;
+    start_clear_locked();
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=0)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,0)!=4
+       || start_append(fixture_blob,capabilities,8,0,0,0,0)!=4)result|=1;
     /* Framing of top-level and nested codec parameters. */
     static const unsigned char framed[]={0,9,0,1,0,5,0,0,'S',0,4,0,99};
     static const unsigned char short_header[]={0,4,0};
@@ -223,6 +261,16 @@ int test_main(void){
     start_notify(1,2,0,0);
     if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=2
        || start_sends!=before+2 || start_last!=1)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,7)!=1
+       || Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,8)!=1)result|=1;
+    // Shutdown must report native failures and be safe to retry.
+    lock_mutex=mutex_fail;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-15 || configured || identity_built)result|=1;
+    lock_mutex=mutex;protect_fail=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-19 || start_len)result|=1;
+    protect_fail=0;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=0 || mailbox || start_len
+       || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0))result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";

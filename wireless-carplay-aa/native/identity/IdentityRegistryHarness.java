@@ -91,8 +91,19 @@ public final class IdentityRegistryHarness {
         IdentityRegistry.Snapshot cpulSnapshot=registry.snapshot();
         check("44C9FA31EC:985:19.0".equals(cpulSnapshot.theme.encoded()) && cpulSnapshot.start,"CPUL tuple and StartSession opt-in");
         check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.REGISTERED,"CPUL registration is not native activation");
+        CarPlayIdentification.NegotiationStatus empty=registry.negotiationStatus();
+        check(empty.startRequested && !empty.themeBuilt && !empty.startArmed,"registration not construction");
+        check(registry.reportNegotiation(cpulSnapshot.generation,7,3,true),"current evidence accepted");
+        CarPlayIdentification.NegotiationStatus observed=registry.negotiationStatus();
+        check(observed.themeBuilt && !observed.vehicleBuilt && observed.startArmed
+                && observed.startSendCapability && observed.startReceiveCapability,"independent theme evidence");
+        check(registry.reportNegotiation(cpulSnapshot.generation,2,3,false),"withdrawal report accepted");
+        check(!registry.negotiationStatus().startSendCapability && !registry.negotiationStatus().startArmed,"withdrawal masks capability evidence");
         registry.removeTheme("fixture.cpul");
         check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.UNAVAILABLE,"CPUL withdrawal");
+        check(!registry.reportNegotiation(cpulSnapshot.generation,7,3,true),"stale evidence rejected");
+        check(!registry.negotiationStatus().themeBuilt && !registry.negotiationStatus().startRequested
+                && registry.negotiationStatus().generation==registry.identityStatus().generation,"withdrawal invalidates snapshot");
         System.out.println("PASS mock mods compose independent vehicle and theme contributions");
     }
 

@@ -26,6 +26,23 @@ public interface CarPlayIdentification {
     /** Snapshot for the current contribution generation in this process. */
     IdentityStatus identityStatus();
 
+    /** Latest observed construction evidence, not proof of phone acceptance.
+     * All fields refer to one contribution generation; zero evidence is conservative.
+     */
+    final class NegotiationStatus {
+        public final long generation;
+        public final boolean vehicleBuilt, themeBuilt, startRequested, startArmed;
+        public final boolean startSendCapability, startReceiveCapability;
+        public NegotiationStatus(long generation, boolean vehicleBuilt, boolean themeBuilt,
+                boolean startRequested, boolean startArmed, boolean startSendCapability, boolean startReceiveCapability) {
+            this.generation=generation;this.vehicleBuilt=vehicleBuilt;this.themeBuilt=themeBuilt;
+            this.startRequested=startRequested;this.startArmed=startArmed;
+            this.startSendCapability=startSendCapability;this.startReceiveCapability=startReceiveCapability;
+        }
+    }
+    /** Process-local snapshot. Consumers must check generation before combining with identityStatus. */
+    NegotiationStatus negotiationStatus();
+
     /** Register or replace one mod's vehicle identity contribution. */
     void registerVehicle(String modId, VehicleIdentity vehicle);
 

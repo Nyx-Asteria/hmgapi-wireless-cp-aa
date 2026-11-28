@@ -92,7 +92,7 @@ final class IdentityInstaller {
         if(armed && armedGeneration==snapshot.generation) { refreshStart(mod,app,registry); return; }
         armed=false; armedGeneration=-1;
         try {
-        if(loaded) NativeIdentity.shutdown();
+        if(loaded){shutdownPending=true;if(!finishShutdown(mod))throw new IllegalStateException("native shutdown pending");}
         lastStart=null;
         withdrawal.setPending(loaded);
         if(vehicle==null && theme==null){resumeRecovery.stop();return;}
@@ -119,7 +119,7 @@ final class IdentityInstaller {
                     dcType, dcPower, acType, acPower, themeId, true); // RC6 verified full-tuple identity format
             if (rc != 0) throw new NativeFailure(rc);
             if(!registry.report(snapshot.generation,CarPlayIdentification.Readiness.ARMED,"native configure succeeded")) {
-                NativeIdentity.shutdown(); return;
+                shutdownPending=true;finishShutdown(mod);return;
             }
             withdrawal.setPending(false); // successful native configure clears its payload
             armed = true;
@@ -161,7 +161,8 @@ final class IdentityInstaller {
 
     private static boolean finishShutdown(ModContext mod){
         try {
-            NativeIdentity.shutdown();
+            int rc=NativeIdentity.shutdown();
+            if(rc!=0){notice(mod,"native shutdown pending ("+rc+")");return false;}
             shutdownPending=false;
             return true;
         }catch(Throwable error){
@@ -237,7 +238,8 @@ final class IdentityInstaller {
         watcherStarted = true;
         Thread t = new Thread(new Runnable() {
             @Override public void run() {
-                int offers = 0, sends = 0, noPayload = 0, allocation = 0, stale = 0, lock = 0;
+                int offers = 0, sends = 0, noPayload = 0, allocation = 0, stale = 0, lock = 0, dispatched = 0, refused = 0;
+                int evidence=-1, capabilityEvidence=-1;long evidenceGeneration=-1;
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
                         synchronized(IdentityInstaller.class){
@@ -265,15 +267,33 @@ final class IdentityInstaller {
                                         && registry.report(armedGeneration,CarPlayIdentification.Readiness.ADVERTISED,"native identification builder completed; delivery not confirmed")) {
                                     mod.log("CarPlay identity: generation="+armedGeneration+" identification built; phone acceptance unconfirmed");
                                 }
+                                int currentEvidence=NativeIdentity.identityEvidence();
+                                if(currentEvidence!=evidence || armedGeneration!=evidenceGeneration){
+                                    mod.log("CarPlay identity: generation="+armedGeneration
+                                            +" vehicle values built="+((currentEvidence&5)==5)
+                                            +" theme value built="+((currentEvidence&2)!=0));
+                                    evidence=currentEvidence;evidenceGeneration=armedGeneration;
+                                }
+                                int capability=NativeIdentity.startSessionStatus(9);
+                                if(armed && !shutdownPending)
+                                    registry.reportNegotiation(armedGeneration,currentEvidence,capability,
+                                            lastStart!=null && !withdrawal.pending());
+                                if(capability!=capabilityEvidence){
+                                    mod.log("CarPlayStart: capability builder evidence sent="+((capability&1)!=0)
+                                            +" received="+((capability&2)!=0)+"; delivery unconfirmed");
+                                    capabilityEvidence=capability;
+                                }
                                 int o = NativeIdentity.startSessionStatus(0), n = NativeIdentity.startSessionStatus(1);
                                 int p=NativeIdentity.startSessionStatus(3), a=NativeIdentity.startSessionStatus(4);
                                 int s=NativeIdentity.startSessionStatus(5), l=NativeIdentity.startSessionStatus(6);
-                                if (o != offers || n != sends || p != noPayload || a != allocation || s != stale || l != lock) {
+                                int ok=NativeIdentity.startSessionStatus(7), rejected=NativeIdentity.startSessionStatus(8);
+                                if (o != offers || n != sends || p != noPayload || a != allocation || s != stale || l != lock || ok != dispatched || rejected != refused) {
                                     mod.log("CarPlayStart: availability offers=" + o + " answers attempted=" + n
+                                            + " OEM dispatch accepted=" + ok + " OEM dispatch refused=" + rejected
                                             + " no payload=" + p + " allocation failures=" + a
                                             + " stale drops=" + s + " lock failures=" + l
                                             + " last result=" + NativeIdentity.startSessionStatus(2));
-                                    offers=o; sends=n; noPayload=p; allocation=a; stale=s; lock=l;
+                                    offers=o; sends=n; noPayload=p; allocation=a; stale=s; lock=l; dispatched=ok; refused=rejected;
                                 }
                             }
                         }
