@@ -79,13 +79,13 @@ jobs:
       - name: Experimental decoded theme transfer regression
         run: |
           mkdir -p out/theme-session
-          javac --release 8 -d out/theme-session wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java
+          javac --release 8 -d out/theme-session wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeQuarantineBudget.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java
           java -cp out/theme-session hmgapi.mods.wireless.ThemeTransferSessionTest
 
       - name: Experimental bounded OPACK regression
         run: |
           mkdir -p out/theme-opack
-          javac --release 8 -d out/theme-opack wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/tests/ThemeOpackTest.java
+          javac --release 8 -d out/theme-opack wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeQuarantineBudget.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/tests/ThemeOpackTest.java
           java -cp out/theme-opack hmgapi.mods.wireless.ThemeOpackTest
 
       - name: CPUL native ownership boundary regression
@@ -94,11 +94,17 @@ jobs:
       - name: Experimental theme quarantine metadata regression
         run: |
           mkdir -p out/theme-metadata
-          javac --release 8 -d out/theme-metadata wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeCaptureMetadata.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java wireless-carplay-aa/tests/ThemeCaptureMetadataTest.java
+          javac --release 8 -d out/theme-metadata wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeQuarantineBudget.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeCaptureMetadata.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java wireless-carplay-aa/tests/ThemeCaptureMetadataTest.java
           java -cp out/theme-metadata hmgapi.mods.wireless.ThemeCaptureMetadataTest
 
       - name: Experimental persisted quarantine pair regression
         run: |
           mkdir -p out/theme-pair
-          javac --release 8 -d out/theme-pair wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeCaptureMetadata.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeQuarantinePair.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java wireless-carplay-aa/tests/ThemeCaptureMetadataTest.java wireless-carplay-aa/tests/ThemeQuarantinePairTest.java
+          javac --release 8 -d out/theme-pair wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeQuarantineBudget.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeCaptureMetadata.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeQuarantinePair.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java wireless-carplay-aa/tests/ThemeCaptureMetadataTest.java wireless-carplay-aa/tests/ThemeQuarantinePairTest.java
           java -cp out/theme-pair hmgapi.mods.wireless.ThemeQuarantinePairTest
+
+      - name: Experimental theme quarantine admission regression
+        run: |
+          mkdir -p out/theme-budget
+          javac --release 8 -d out/theme-budget wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeQuarantineBudget.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeCaptureMetadata.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java wireless-carplay-aa/tests/ThemeCaptureMetadataTest.java wireless-carplay-aa/tests/ThemeQuarantineBudgetTest.java
+          java -cp out/theme-budget hmgapi.mods.wireless.ThemeQuarantineBudgetTest

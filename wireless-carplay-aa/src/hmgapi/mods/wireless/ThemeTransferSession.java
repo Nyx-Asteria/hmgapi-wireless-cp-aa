@@ -73,7 +73,7 @@ final class ThemeTransferSession implements Closeable {
                 Header h=new Header(session(message),integer(message,"version",0,0xffffffffL),
                     (int)integer(message,"chunkCount",1,ThemeArchiveCapture.MAX_CHUNKS),
                     metadata(message,"certificate"),metadata(message,"signature"),metadata(message,"additions"));
-                capture=new ThemeArchiveCapture(directory,h.chunkCount,byteLimit);
+                capture=ThemeQuarantineBudget.admit(directory,h.chunkCount,byteLimit);
                 header=h;
                 return null;
             }
