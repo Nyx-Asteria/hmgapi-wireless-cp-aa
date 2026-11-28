@@ -58,7 +58,7 @@ final class IdentityInstaller {
                 try {
                     // appLoaded may precede the iAP2 server's native initialization. This
                     // point runs after it and before the identification message is built.
-                    if (!armed) apply(mod, app, contributions);
+                    if (needsApply(contributions)) apply(mod, app, contributions);
                     else refreshStart(mod, app, contributions);
                     if(groupsWanted(mod,contributions))enableGroups(app.classLoader);
                 } catch (Throwable t) {
@@ -76,7 +76,7 @@ final class IdentityInstaller {
                 if (p.args.length != 1 || !(p.args[0] instanceof Integer) || ((Integer)p.args[0]) != 4) return;
                 log(mod,"MILESTONE iAP2 component 4 pre-connect enter");
                 try {
-                    if (!armed) apply(mod, app, contributions);
+                    if (needsApply(contributions)) apply(mod, app, contributions);
                     refreshStart(mod, app, contributions);
                 } catch (Throwable t) { failure(mod, "CarPlayStart Bluetooth pre-connect", t); }
                 // Stock vehicle groups are independent of the optional session extension.
@@ -90,6 +90,10 @@ final class IdentityInstaller {
             }
         });
         watchStart(mod, app, registry);
+    }
+
+    private static synchronized boolean needsApply(IdentityRegistry registry) {
+        return !armed || armedGeneration!=registry.snapshot().generation;
     }
 
     private static synchronized void apply(ModContext mod, LoadedApp app, IdentityRegistry registry) {
@@ -277,7 +281,12 @@ final class IdentityInstaller {
                                 }
                             }else{
                                 if(shutdownPending)finishShutdown(mod);
-                                refreshStart(mod,app,registry);
+                                // A registry update can precede its synchronous change callback.
+                                // Reconcile only an already-armed stale generation, not failed retries.
+                                if(armed && needsApply(registry)){
+                                    try{apply(mod,app,registry);}
+                                    catch(Throwable t){failure(mod,"CarPlay identity generation reconciliation",t);}
+                                }else refreshStart(mod,app,registry);
                             }
                         }
                         synchronized (IdentityInstaller.class) {

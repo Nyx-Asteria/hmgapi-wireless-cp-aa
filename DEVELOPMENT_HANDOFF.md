@@ -1,3 +1,7 @@
+# RC9 generation reconciliation
+
+Parent 115ccba0087ed604f384bb03ff06a03c9ad58f77 passed complete CI 46166097559. Registry mutation publishes generation before invoking listener outside registry lock. OEM pre-connect and feature-init previously tested only armed boolean, allowing stale generation to clear StartSession without applying current identity. Reconcile stale armed generation at both hooks and watcher; existing failed-configure retry policy unchanged. Synchronized predicate uses installer lock; no new registry-to-installer lock inversion. No API or wire changes. New behavior not yet vehicle validated; full CI pending, dedicated race fixture outstanding. Updated logs awaited but not blocking independent work.
+
 # RC9 corrected vehicle assessment and fixture placement
 
 User reports subsequent Ultra Sidebars launch failed entirely; prior slow launch was an outlier, not reliable fallback. More logs expected. Seat heating anomaly belongs to CPU RC12 unless evidence links it to WCP; not reviewed here. CI 46162012163 fully passed. CI 46162273959 mod and pin passed, journal failed compiling fixture because early lookup assertion was inserted before legacy declaration. Move assertion to intended legacy block; production code unchanged. Amend original callback commit rather than append fix commit. Fresh CI required.
