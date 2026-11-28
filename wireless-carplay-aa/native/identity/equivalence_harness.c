@@ -373,6 +373,21 @@ int test_main(void){
     root[5]=(Param){0};
     if(start_configure(valid_empty,sizeof(valid_empty))!=0 || start_len!=6 || fixture_handlers[33].id!=AVAILABILITY)FAIL_CHECK();
     start_clear_locked();
+    // Combined publication must arm identity and payload together.
+    if(configure_with_start("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1,valid_empty,sizeof(valid_empty))!=0
+       || !configured || !has_theme || start_len!=sizeof(valid_empty))FAIL_CHECK();
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=32)FAIL_CHECK();
+    // Malformed optional payload must retain identity but clear previous payload.
+    if(configure_with_start("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1,invalid,sizeof(invalid))!=1
+       || !configured || !has_theme || start_len)FAIL_CHECK();
+    // An ambiguous OEM capability table must also retain identity-only fallback.
+    root[5]=root[3];
+    if(configure_with_start("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1,valid_empty,sizeof(valid_empty))!=1
+       || !configured || start_len)FAIL_CHECK();
+    root[5]=(Param){0};
+    if(configure_with_start("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1,valid_empty,sizeof(valid_empty))!=0
+       || start_len!=sizeof(valid_empty))FAIL_CHECK();
+    start_clear_locked();
     // Exercise both wrapped callbacks through a real matching builder.
     root[3]=parameter(6,12);root[3].length=(u32)fixture_blob;
     root[4]=parameter(7,12);root[4].length=(u32)fixture_blob;
@@ -434,4 +449,4 @@ void run(void){
     semihost(4,ok?pass:fail);
     u32 status[2]={0x20026,ok?0:1};semihost(0x20,status);for(;;){}
 }
-__attribute__((naked)) void _start(void){__asm__ volatile("ldr sp, =0x01000000\nb run");}
+__attribute__((naked)) void _start(void){__asm__ volatile("mov sp, #0x01000000\nb run");}

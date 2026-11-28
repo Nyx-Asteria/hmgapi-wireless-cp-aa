@@ -1,6 +1,14 @@
-# RC9 compilation correction
+# RC9 ARM harness assembly correction
 
-CI 46171120755 and 46171230993 failed production native compilation on unused legacy configure wrapper retained for harness. Mark wrapper unused; no runtime behavior change. Rebuild original implementation and fixture commits with corrected ancestry. Fresh CI required.
+CI 46171450188 failed at harness line 452 with out-of-range PC-relative fixup in naked entry point. Replace literal-pool stack initialization with ARM immediate MOV (0x01000000 is encodable). No production change. Amend fixture commit; fresh CI required. Publication explicitly held until new vehicle logs reviewed.
+
+# RC9 corrected ancestry
+
+Native wrapper compilation fix incorporated into atomic implementation parent 23aa4525a49decea283cd3a9d3b7684bb9244b65. Both prior runs failed unused-function compilation; fresh CI required.
+
+# RC9 combined publication regression fixtures
+
+Parent 7d59ccf9e34915e7543fc340ce463407045666a7 CI 46171120755 in progress at inspection. Add ARM combined configuration cases: successful payload publication and coherent snapshot, malformed payload identity-only fallback, ambiguous OEM capability table fallback, successful retry. Existing serializer and dispatch tests retained. Fresh CI required; no vehicle validation or release. Next verify both runs and inspect inactivity transport lifecycle.
 
 # RC9 atomic initial identity and StartSession publication
 
