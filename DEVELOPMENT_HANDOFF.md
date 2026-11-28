@@ -276,6 +276,9 @@ Actual manifest-declared recipes fetched at WCP 809936b3cbfa121ddd24ac501a32f189
 ## Final companion candidate preparation and pin-check repair
 Parent WCP 48c1acfd07b1b296781addcc7542e14a1ac6eec1. STBT RC4 metadata, installer, readmes, release notes and full CI release gate committed at fac2ec367028a97334d548c53d5930d768ec2694. Both WCP candidate 46090347739 and preceding workflow 46090222027 ran successful journal and mod/build jobs but failed pin job. Actual job 140809544488 log identified check-pin.py line 9 hard-coded expectation of direct source-floor call in release.yml; full CI is now invoked instead. Updated checker to require the reusable CI declaration, CI's pinned floor call, release CI dependency on version gate, and release job dependency on full CI. Immutable SDK/floor checks unchanged. No runtime changes, no weakening of release gate. Latest WCP revision requires fresh CI. STBT new candidate CI not yet listed at initial inspection. CPUL corrected Stage 1 source CI green 46089318024. Supply exact new WCP and STBT candidate pins to CPUL for final audit, do not call them green until their own CI passes. No release authorized or published; Stage 2 remains inactive.
 
+## Pin-check source correction
+Parent 989e9f4fbeb1cb5a253ee0ba0754e9bffcdbe3f6: corrected unintended replacement-string expansion in the preceding checker edit by writing the complete Python source literally. No runtime changes. Fresh CI required; use this revision, not the preceding malformed checker, as candidate.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
