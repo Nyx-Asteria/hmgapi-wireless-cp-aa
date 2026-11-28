@@ -50,31 +50,54 @@ stop_native() {
     native_pid=
 }
 trap 'stop_native; exit 0' HUP INT TERM
-# Keep at most twelve native session groups, including rotation segments.
+# Reserve room for the next native group, including its three rotations.
+# Only fully verified groups can be reclaimed. Never delete active or unexported evidence.
+native_capacity_reported=0
 prune_native() {
+    limit=$1
     count=0
-    for file in "$native_dir"/session-*.native.log; do
+    seen=
+    for file in "$native_dir"/session-*.native.log "$native_dir"/session-*.native.log.[123]; do
         [ -f "$file" ] || continue
+        name=${file##*/}; base=${name%%.native.log*}
+        case " $seen " in *" $base "*) continue;; esac
+        seen="$seen $base"
         count=$((count + 1))
     done
-    for file in "$native_dir"/session-*.native.log; do
-        [ "$count" -gt 12 ] || break
-        [ -f "$file" ] || continue
-        name=${file##*/}; base=${name%.native.log}
+    seen=
+    for file in "$native_dir"/session-*.native-exported; do
+        [ "$count" -gt "$limit" ] || break
+        [ -f "$file" ] && [ ! -L "$file" ] || continue
+        [ "$(cat "$file" 2>/dev/null)" = verified ] || continue
+        name=${file##*/}; base=${name%.native-exported}
         [ "$base" != "$native_session" ] || continue
-        if rm -f "$native_dir/$base.native-ready" "$file.1" "$file.2" "$file.3" "$file" &&
-                [ ! -e "$file" ] && [ ! -e "$file.1" ] && [ ! -e "$file.2" ] && [ ! -e "$file.3" ]; then
+        [ ! -f "$source_dir/$base.active" ] || continue
+        [ -f "$native_dir/$base.native-ready" ] || continue
+        if rm -f "$native_dir/$base.native.log" "$native_dir/$base.native.log.1" "$native_dir/$base.native.log.2" "$native_dir/$base.native.log.3" &&
+                rm -f "$native_dir/$base.native-ready" "$file"; then
             count=$((count - 1))
         else
             echo "Native retention cleanup failed: $base" >&2
         fi
     done
+    [ "$count" -le "$limit" ]
 }
 # Prefer a short historical tail when supported; older Android logcat lacks -T.
 # The fallback reads the existing bounded ring before following live output.
 start_native() {
     # Recheck immediately before starting, including retry and session switches.
     if foreign_writer; then return 1; fi
+    # Retry an existing active group without requiring an extra slot.
+    if [ ! -f "$native_dir/$1.native.log" ]; then
+        if ! prune_native 11; then
+            if [ "$native_capacity_reported" -eq 0 ]; then
+                echo "Native collector storage full; unexported recordings retained" >&2
+                native_capacity_reported=1
+            fi
+            return 1
+        fi
+    fi
+    native_capacity_reported=0
     native_session=$1
     if logcat -h 2>&1 | grep -E '(^|[[:space:]])-T([[:space:],]|$)' >/dev/null; then
         set -- -T 200
@@ -118,7 +141,7 @@ while true; do
         retry_delay=1
         healthy_ticks=0
         [ -z "$current" ] || start_native "$current"
-        if ! foreign_writer; then prune_native; fi
+        if ! foreign_writer; then prune_native 12 || :; fi
     fi
     # Keep polling the session marker during backoff; never sleep through teardown.
     if [ -n "$current" ] && [ "$current" = "$native_session" ]; then

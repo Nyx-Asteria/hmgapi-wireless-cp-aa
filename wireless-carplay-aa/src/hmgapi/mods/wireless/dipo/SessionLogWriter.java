@@ -32,9 +32,22 @@ final class SessionLogWriter {
     private volatile String exportFailure;
     String exportFailure() { return exportFailure; }
     private final ArrayBlockingQueue<Event> queue = new ArrayBlockingQueue<Event>(MAX_QUEUE);
-    private final AtomicLong lost = new AtomicLong();
+    private AtomicLong admittedDrops;
+    private long admittedGeneration;
+    private AtomicLong activeDrops = new AtomicLong();
     private final Thread worker;
     private volatile String failure;
+    private final Health health;
+    interface Health { void changed(String state); }
+    // Observer executes only on the writer thread, never while projection holds
+    // the admission lock. Health reporting must not kill recording.
+    private String reported;
+    private void reportHealth() {
+        String state=failure==null?"ready":failure;
+        if(state.equals(reported))return;
+        reported=state;
+        if(health!=null)try{health.changed(state);}catch(RuntimeException ignored){}
+    }
     private volatile boolean closed;
     private File directory;
     private FileOutputStream normal, errors;
@@ -53,6 +66,7 @@ final class SessionLogWriter {
         final String text;
         final boolean important;
         SessionLogPolicy.Category category;
+        AtomicLong drops;
         Event(int kind, long time, long generation, String text, boolean important) {
             this.kind=kind; this.time=time; this.generation=generation; this.text=text; this.important=important;
         }
@@ -60,7 +74,11 @@ final class SessionLogWriter {
     SessionLogWriter(File root) { this(root,null); }
     SessionLogWriter(File root, Exporter exporter) { this(root,exporter,EnumSet.noneOf(SessionLogPolicy.Category.class)); }
     SessionLogWriter(File root, Exporter exporter, EnumSet<SessionLogPolicy.Category> enabledDiagnostics) {
+        this(root,exporter,enabledDiagnostics,null);
+    }
+    SessionLogWriter(File root, Exporter exporter, EnumSet<SessionLogPolicy.Category> enabledDiagnostics, Health health) {
         this.root=root;
+        this.health=health;
         this.enabledDiagnostics=enabledDiagnostics.clone();
         this.exporter=exporter;
         worker=new Thread(new Runnable(){ public void run(){ loop(); } }, "wcp-session-log");
@@ -93,36 +111,41 @@ final class SessionLogWriter {
     }
     // Reserve capacity for lifecycle and error events. On overload evict ordinary messages first.
     private synchronized void offer(Event e) {
-        if(closed) return;
-        if(!e.important && queue.remainingCapacity() <= 128) { lost.incrementAndGet(); return; }
-        if(queue.offer(e)) return;
-        if(e.important) {
-            for(Event old:queue) if(old.kind==0 && !old.important && queue.remove(old)) {
-                lost.incrementAndGet();
-                if(queue.offer(e)) return;
-                break;
+        if(closed)return;
+        if(e.kind==1){
+            // Reserve one end slot for every admitted generation; no unbounded lifecycle backlog.
+            if(admittedDrops!=null || queue.remainingCapacity()<2){
+                failure="session start rejected: lifecycle backlog";return;
             }
-            if(e.kind!=0) {
-                for(Event old:queue) if(old.kind==0 && queue.remove(old)) {
-                    lost.incrementAndGet();
-                    if(queue.offer(e)) return;
-                    break;
-                }
-            }
+            admittedGeneration=e.generation;
+            admittedDrops=new AtomicLong();
+            e.drops=admittedDrops;
+            if(!queue.offer(e)){admittedDrops=null;failure="session start admission failed";}
+            return;
         }
-        lost.incrementAndGet();
-        if(e.kind!=0) failure="session lifecycle queue exhausted";
+        if(admittedDrops==null || admittedGeneration!=e.generation)return;
+        e.drops=admittedDrops;
+        if(e.kind==2){
+            if(!queue.offer(e))failure="reserved session end admission failed";
+            admittedDrops=null;
+            return;
+        }
+        int reserve=e.important?1:128;
+        if(queue.remainingCapacity()<=reserve){e.drops.incrementAndGet();return;}
+        if(!queue.offer(e))e.drops.incrementAndGet();
     }
     synchronized void shutdown() { closed=true; requestExport(); }
     boolean await(long millis) throws InterruptedException { worker.join(millis); return !worker.isAlive(); }
     private void loop() {
         long last=androidIndependentMonotonic();
         try {
-            ensureDir(root);
-            recover(root);
+            // Initial storage failure must not permanently stop the worker.
+            try { ensureDir(root); } catch(IOException ex) { failure="spool initialization failed: "+ex.getClass().getSimpleName(); }
+            try { recover(root); } catch(IOException ex) { failure=ex.getMessage(); }
             spoolReady=true;
             requestExport();
             try { prune(false); } catch(IOException ex) { failure=ex.getMessage(); }
+            reportHealth();
             while(!closed || !queue.isEmpty()) {
                 Event e=queue.poll(250,TimeUnit.MILLISECONDS);
                 if(e!=null) {
@@ -138,6 +161,7 @@ final class SessionLogWriter {
                         failure=ex.toString(); abandon();
                     }
                 }
+                reportHealth();
                 long now=androidIndependentMonotonic();
                 if(now-last>=5000) {
                     try { sync(); } catch(IOException ex){ failure=ex.toString(); abandon(); }
@@ -146,14 +170,16 @@ final class SessionLogWriter {
             }
             if(directory!=null) complete(System.currentTimeMillis(),"logger shutdown; session end not observed");
         } catch(Exception e) { failure=e.toString(); }
-        finally { abandon(); }
+        finally { reportHealth(); abandon(); }
     }
     private static long androidIndependentMonotonic(){ return System.nanoTime()/1000000L; }
     private void begin(Event e) throws IOException {
-        recover(root);
+        ensureDir(root);
+        try { recover(root); } catch(IOException ex) { failure=ex.getMessage(); }
         prune(true);
         milestones.clear(); eventCounts.clear(); warningCount=errorCount=0;
         firstEventAt=lastEventAt=e.time;
+        activeDrops=e.drops;
         start=e.time; generation=e.generation; written=0; errorBytes=0; diagnosticBytes=0; suppressed=0;
         currentId=new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss",Locale.US).format(new Date(start))
             +"_session-"+generation+"_"+UUID.randomUUID().toString();
@@ -164,6 +190,7 @@ final class SessionLogWriter {
         writeText(new File(directory,"summary.txt"),"generation="+generation+"\nstart_ms="+start+"\n"+e.text+"\n");
         append(new Event(0,e.time,generation,"INFO CORE session started",false));
         sync();
+        failure=null;
     }
     private void append(Event e) throws IOException {
         summarize(e);
@@ -213,7 +240,7 @@ final class SessionLogWriter {
         FileOutputStream out=new FileOutputStream(new File(folder,"summary.txt"),true);
         try {
             out.write(("end_ms="+end+"\nduration_ms="+Math.max(0,end-start)+"\ntermination="+reason+
-                "\nqueue_dropped="+lost.getAndSet(0)+"\nsize_dropped="+suppressed+"\n").getBytes("UTF-8"));
+                "\nqueue_dropped="+activeDrops.get()+"\nsize_dropped="+suppressed+"\n").getBytes("UTF-8"));
             out.write(("first_event_ms="+firstEventAt+"\nlast_event_ms="+lastEventAt+"\nwarning_count="+warningCount+"\nerror_count="+errorCount+"\n").getBytes("UTF-8"));
             for(Map.Entry<SessionLogPolicy.Category,Long> item:eventCounts.entrySet())out.write(("events_"+item.getKey().name().toLowerCase(Locale.US)+"="+item.getValue()+"\n").getBytes("UTF-8"));
             for(Map.Entry<String,String> item:milestones.entrySet())out.write((item.getKey()+"="+item.getValue()+"\n").getBytes("UTF-8"));
@@ -243,7 +270,7 @@ final class SessionLogWriter {
                 for(File f:files) {
                     if(closed)break;
                     synchronized(spoolLock) {
-                        if(!f.isDirectory()||!sessionName(f.getName())||new File(f,".exported").isFile())continue;
+                        if(!f.isDirectory()||!sessionName(f.getName())||verifiedMarker(f))continue;
                         exporting=f;
                     }
                     try {exporter.exportOne(f,dest);exportFailure=null;}
@@ -272,14 +299,39 @@ final class SessionLogWriter {
     }
     static void recover(File root) throws IOException {
         File[] files=root.listFiles();
-        if(files==null) return;
+        if(files==null)return;
+        IOException failure=null;
         for(File f:files) if(f.isDirectory() && f.getName().endsWith(".open")) {
-            FileOutputStream out=new FileOutputStream(new File(f,"summary.txt"),true);
-            try { out.write("\ntermination=unknown; recovered unfinished session\n".getBytes("UTF-8")); out.getFD().sync(); }
-            finally { out.close(); }
-            File target=new File(root,f.getName().substring(0,f.getName().length()-5));
-            if(target.exists() || !f.renameTo(target)) throw new IOException("recovery rename failed");
+            try {
+                File target=new File(root,f.getName().substring(0,f.getName().length()-5));
+                if(target.exists())throw new IOException("recovery destination conflict");
+                for(String name:new String[]{"session.log","errors.log"}){
+                    File payload=new File(f,name);
+                    if(!payload.exists())writeText(payload,"");
+                }
+                File summary=new File(f,"summary.txt");
+                // Bounded recovery annotation, even if repeated rename attempts fail.
+                if(summary.length()<32768){
+                    try(FileOutputStream out=new FileOutputStream(summary,true)){
+                        out.write("\ntermination=unknown; recovered unfinished session\n".getBytes("UTF-8"));
+                        out.getFD().sync();
+                    }
+                }
+                if(!f.renameTo(target))throw new IOException("recovery rename failed");
+            }catch(IOException ex){if(failure==null)failure=ex;}
         }
+        if(failure!=null)throw failure;
+    }
+    static boolean verifiedMarker(File session) {
+        File marker=new File(session,".exported");
+        try {
+            if(!marker.isFile()||marker.length()!=9)return false;
+            if(!marker.getCanonicalFile().equals(new File(session.getCanonicalFile(),".exported")))return false;
+            try(DataInputStream in=new DataInputStream(new FileInputStream(marker))){
+                byte[] bytes=new byte[9];in.readFully(bytes);
+                return Arrays.equals(bytes,"verified\n".getBytes("UTF-8"))&&in.read()==-1;
+            }
+        }catch(IOException|SecurityException ex){return false;}
     }
     private void prune(boolean reserve) throws IOException {
         synchronized(spoolLock) {
@@ -287,12 +339,16 @@ final class SessionLogWriter {
         if(files==null) return;
         List<File> sessions=new ArrayList<File>();
         long size=0;
-        for(File f:files) if(f.isDirectory() && sessionName(f.getName())) { sessions.add(f); size+=size(f); }
-        Collections.sort(sessions,new Comparator<File>(){public int compare(File a,File b){boolean ae=new File(a,".exported").isFile(), be=new File(b,".exported").isFile(); if(ae!=be)return ae?-1:1; return a.getName().compareTo(b.getName());}});
+        int interrupted=0;
+        for(File f:files) if(f.isDirectory()) {
+            if(sessionName(f.getName())) { sessions.add(f); size+=size(f); }
+            else if(f.getName().endsWith(".open")) { interrupted++;size+=size(f); }
+        }
+        Collections.sort(sessions,new Comparator<File>(){public int compare(File a,File b){boolean ae=verifiedMarker(a), be=verifiedMarker(b); if(ae!=be)return ae?-1:1; return a.getName().compareTo(b.getName());}});
         // Reserve one full session while a writer may be active.
-        while(sessions.size()>(reserve?MAX_SESSIONS-1:MAX_SESSIONS) || size>MAX_TOTAL-(reserve?MAX_SESSION:0)) {
+        while(sessions.size()+interrupted>(reserve?MAX_SESSIONS-1:MAX_SESSIONS) || size>MAX_TOTAL-(reserve?MAX_SESSION:0)) {
             File f=null;
-            for(File candidate:sessions)if(!candidate.equals(exporting)&&new File(candidate,".exported").isFile()){f=candidate;break;}
+            for(File candidate:sessions)if(!candidate.equals(exporting)&&verifiedMarker(candidate)){f=candidate;break;}
             if(f==null)throw new IOException("log retention full: unexported recordings preserved");
             sessions.remove(f); long n=size(f); delete(f); size-=n;
         }

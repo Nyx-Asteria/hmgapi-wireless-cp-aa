@@ -138,6 +138,16 @@ public final class SessionExporterTest {
             SessionExporter.exportNative(nativeSpool, spool, logs, new SessionExporter.MountGuard(usb, mounts));
             check(new File(dest, "session-101.native.log.complete").isFile(), "native base verified");
             check(new File(dest, "session-101.native.log.1.complete").isFile(), "rotation verified");
+            check(new File(nativeSpool,"session-101.native-exported").isFile(),"native group verified");
+            check(!new File(nativeSpool,"session-102.native-exported").exists(),"unfinished group not marked");
+            check(!new File(nativeSpool,"session-103.native-exported").exists(),"active group not marked");
+            put(new File(nativeSpool,"session-104.native.log"),"first");
+            put(new File(nativeSpool,"session-104.native.log.1"),"second");
+            put(new File(nativeSpool,"session-104.native-ready"),"ready");
+            put(new File(dest,"session-104.native.log.1"),"conflict");
+            try {SessionExporter.exportNative(nativeSpool,spool,logs,new SessionExporter.MountGuard(usb,mounts));throw new AssertionError("native conflict accepted");}
+            catch(IOException expected){}
+            check(!new File(nativeSpool,"session-104.native-exported").exists(),"partial group never marked");
             check(!new File(dest, "session-102.native.log").exists(), "unready native excluded");
             check(!new File(dest, "session-103.native.log").exists(), "active native excluded");
             check(!new File(dest, "session-101.native.log.4").exists(), "unexpected rotation excluded");
@@ -217,6 +227,11 @@ public final class SessionExporterTest {
             check(!new File(bundle,".exported").exists(),"remount not marked");
             SessionExporter.exportBundles(bundles,logs,new SessionExporter.MountGuard(usb,mounts));
             check(new File(bundle,".exported").isFile(),"retry verified");
+            put(new File(bundle,".exported"),"verif");
+            check(!SessionExporter.verifiedBundleMarker(bundle),"torn marker rejected");
+            SessionExporter.exportBundles(bundles,logs,new SessionExporter.MountGuard(usb,mounts));
+            check(SessionExporter.verifiedBundleMarker(bundle),"torn marker repaired");
+            check(!new File(bundle,".exported.part").exists(),"marker published atomically");
             System.out.println("Java session export tests passed");
         } finally { remove(root); }
     } finally { for(java.security.Provider provider:providers) java.security.Security.addProvider(provider); }

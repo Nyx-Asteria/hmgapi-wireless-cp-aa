@@ -46,6 +46,52 @@ public final class SessionLogWriterTest {
             check(summary.contains("events_identity=3"));
             check(summary.contains("error_count=1"));
             check(summary.contains("first_event_ms="+nativeAt));
+            File stress=new File(root,"stress");check(stress.mkdir());
+            SessionLogWriter burst=new SessionLogWriter(stress);
+            burst.start(100,"first");
+            for(int i=0;i<20000;i++)burst.record(100,INFO,CORE,"burst "+i);
+            burst.finish(100,"first end",0);
+            burst.start(101,"second");
+            burst.record(101,INFO,CORE,"second only");
+            burst.finish(101,"second end",0);
+            burst.shutdown();check(burst.await(20000));check(burst.failure()==null);
+            File first=null,second=null;
+            for(File f:stress.listFiles()){
+                if(f.getName().contains("session-100_"))first=f;
+                if(f.getName().contains("session-101_"))second=f;
+            }
+            check(first!=null&&second!=null);
+            check(read(new File(first,"summary.txt")).contains("termination=first end"));
+            check(read(new File(second,"summary.txt")).contains("queue_dropped=0"));
+            check(read(new File(second,"session.log")).contains("second only"));
+            File broken=new File(root,"broken.open"),conflict=new File(root,"broken"),good=new File(root,"good.open");
+            check(broken.mkdir()&&conflict.mkdir()&&good.mkdir());
+            try{SessionLogWriter.recover(root);throw new AssertionError("conflict ignored");}catch(IOException expected){}
+            check(broken.isDirectory());
+            check(new File(root,"good/errors.log").isFile());
+            File markerDir=new File(root,"marker-test");check(markerDir.mkdir());
+            File marker=new File(markerDir,".exported");
+            SessionLogWriter.writeText(marker,"");
+            check(!SessionLogWriter.verifiedMarker(markerDir));
+            SessionLogWriter.writeText(marker,"verif");
+            check(!SessionLogWriter.verifiedMarker(markerDir));
+            SessionLogWriter.writeText(marker,"verified\n");
+            check(SessionLogWriter.verifiedMarker(markerDir));
+            File unavailable=new File(root,"unavailable");SessionLogWriter.writeText(unavailable,"not a directory");
+            final java.util.List<String> health=java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+            SessionLogWriter retry=new SessionLogWriter(unavailable,null,java.util.EnumSet.noneOf(SessionLogPolicy.Category.class),
+                new SessionLogWriter.Health(){public void changed(String state){health.add(state);}});
+            retry.start(200,"unavailable");
+            retry.finish(200,"end",0);
+            long deadline=System.currentTimeMillis()+5000;
+            while(health.isEmpty()&&System.currentTimeMillis()<deadline)Thread.sleep(20);
+            check(!health.isEmpty()&&!health.get(0).equals("ready"));
+            check(unavailable.delete()&&unavailable.mkdir());
+            retry.start(201,"recovered");
+            retry.record(201,INFO,CORE,"recording resumed");
+            retry.finish(201,"end",0);
+            retry.shutdown();check(retry.await(10000));check(retry.failure()==null);
+            check(health.contains("ready"));
             System.out.println("SessionLogWriterTest passed");
         }finally{SessionLogWriter.delete(root);}
     }
