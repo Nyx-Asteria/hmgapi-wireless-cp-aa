@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the real ARM serializer in QEMU and compare it with EV Routing's former output."""
 from pathlib import Path
-import os, re, subprocess, tempfile
+import os, re, subprocess, tempfile, platform
 
 HERE=Path(__file__).resolve().parent
 CLANG=os.environ.get('CLANG','clang'); LLD=os.environ.get('LLD','ld.lld')
@@ -13,8 +13,11 @@ with tempfile.TemporaryDirectory() as d:
     classes=d/'classes';classes.mkdir()
     source=HERE.parents[1]/'src/hmgapi/mods/wireless'
     subprocess.run([JAVA_HOME/'bin/javac','--release','7','-Xlint:-options','-d',classes,
-                    source/'api/CarPlayIdentification.java',source/'IdentityRegistry.java',HERE/'IdentityRegistryHarness.java'],check=True)
+                    source/'api/CarPlayIdentification.java',source/'IdentityRegistry.java',
+                    source/'StartSessionCodec.java',HERE/'IdentityRegistryHarness.java',
+                    HERE/'StartSessionCodecTest.java'],check=True)
     subprocess.run([JAVA_HOME/'bin/java','-cp',classes,'hmgapi.mods.wireless.IdentityRegistryHarness'],check=True)
+    subprocess.run([JAVA_HOME/'bin/java','-cp',classes,'hmgapi.mods.wireless.StartSessionCodecTest'],check=True)
     gate_obj=d/'gate.o';gate_elf=d/'gate.elf';gate_bin=d/'gate.bin'
     subprocess.run([CLANG,'--target=armv7-none-eabi','-mthumb','-c',HERE/'recipe_gate.s','-o',gate_obj],check=True)
     subprocess.run([LLD,'--image-base=0','-Ttext=0','-e','gate','-o',gate_elf,gate_obj],check=True)
@@ -24,7 +27,10 @@ with tempfile.TemporaryDirectory() as d:
     if gate_bin.read_bytes()!=expected_gate:raise SystemExit('recipe gate differs from its reviewed ARM source')
     print('PASS recipe gate is byte-for-byte identical to its reviewed ARM source')
     arm=['--target=armv7a-linux-androideabi','-marm','-march=armv7-a','-mfloat-abi=soft','-O0','-ffreestanding','-fno-builtin']
-    subprocess.run([CLANG,*arm,'-I'+str(HERE/'compat'),'-I'+str(JAVA_HOME/'include'),'-I'+str(JAVA_HOME/'include/darwin'),'-c',HERE/'equivalence_harness.c','-o',obj],check=True)
+    subprocess.run([CLANG,*arm,'-I'+str(HERE/'compat'),'-I'+str(JAVA_HOME/'include'),'-I'+str(JAVA_HOME/'include'/('darwin' if platform.system()=='Darwin' else 'linux')),'-c',HERE/'equivalence_harness.c','-o',obj],check=True)
     script.write_text('SECTIONS { . = 0x00010000; .text : { *(.text*) } .rodata : { *(.rodata*) } .data : { *(.data*) } .bss : { *(.bss*) *(COMMON) } }')
     subprocess.run([LLD,'-static','-T',script,'-e','_start','-o',elf,obj],check=True)
-    subprocess.run([QEMU,'-M','versatilepb,audiodev=audio0','-audiodev','none,id=audio0','-cpu','cortex-a9','-nographic','-semihosting-config','enable=on,target=native','-kernel',elf],check=True,timeout=20)
+    run=subprocess.run([QEMU,'-M','versatilepb,audiodev=audio0','-audiodev','none,id=audio0','-cpu','cortex-a9','-nographic','-semihosting-config','enable=on,target=native','-kernel',elf],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=30)
+    print(run.stdout)
+    if run.returncode or 'PASS Wireless serializer output' not in run.stdout:
+        raise SystemExit('ARM serializer regression failed')

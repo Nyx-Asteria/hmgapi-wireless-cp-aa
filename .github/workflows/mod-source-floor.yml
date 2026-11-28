@@ -195,6 +195,12 @@ jobs:
               assert not missing, missing
           PY
 
+      - name: Rebuild the identity JNI library for actual test packages
+        run: |
+          if [ -d wireless-carplay-aa/native/identity ]; then
+            sh wireless-carplay-aa/native/identity/build.sh
+          fi
+
       - name: Build
         run: |
           cp=""

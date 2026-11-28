@@ -61,6 +61,12 @@ jobs:
           mkdir -p out/rc8-native
           sh wireless-carplay-aa/native/identity/build.sh "$PWD/out/rc8-native/libcarplayidentity.so"
 
+      - name: RC8 identity and StartSession wire vectors
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq qemu-system-arm llvm
+          python3 wireless-carplay-aa/native/identity/test_equivalence.py
+
       - name: Java session export regression
         run: |
           mkdir -p out/session-export

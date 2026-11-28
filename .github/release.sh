@@ -30,10 +30,19 @@ Z=$(HMGAPI_MOD_BUILD="$PWD/out/build/$MOD" sh "$SDK/bin/mkmodpkg.sh" "$MOD" "$KE
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 unzip -q "$Z" -d "$W"
 $ENG verify "$W" "$UUID"
+packaged_native=$(find "$W" -type f -name libcarplayidentity.so)
+test -n "$packaged_native"
+cmp "$MOD/files/libcarplayidentity.so" "$packaged_native"
 sh "$SDK/bin/mknemesismod.sh" "$Z" out/dist
 mkdir -p out/assets
 cp "$Z" out/dist/"$MOD-$V"-nemesis.zip out/dist/"$MOD-$V"-nemesis-package.zip out/assets/
 (cd out/assets && sha256sum *.zip > SHA256SUMS && cat SHA256SUMS)
+{
+    printf 'source_commit=%s\n' "$(git rev-parse HEAD)"
+    printf 'author_uuid=%s\n' "$UUID"
+    sha256sum "$MOD/files/libcarplayidentity.so"
+} > out/assets/BUILD-PROVENANCE.txt
+cp ".github/release-notes/$TAG.md" out/assets/CHANGELOG.md
 # for the catalogue PR in HMG-API, once the release is published (a maintainer's); the
 # catalogue lists finals only, so for a pre-release the line a HMG-API pre-release pins it
 # with (tools/release-mods.txt)
