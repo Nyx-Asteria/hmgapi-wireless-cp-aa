@@ -249,6 +249,9 @@ Parent 60211e2547b6aeb0c96ca790557147ba599941f4. Preserved concurrent bounded OP
 ## RC7 FileTransfer — accepted ownership and targeted transport research
 Parent 34206057a9c565f47d80ceab31e6b1c9965e6ba8. CPUL confirmed sole native owner; hold integration changes until protocol requirements established. Actual extracted 24A446 binaries inspected; import library ordinal resolves UpdateData UUID constant to missing CoreMedia binary, identified dedicated socket flag/seed, separate sendAsIs flag, token and port branch. No UUID value or per-client socket selection proven. Progress estimates held, no runtime/companion changes or releases. See docs/cpul-filetransfer-integration.md. Parent CI [{"status":"completed","conclusion":"success","url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46081283518"}]. Next trace channel initialization; request only missing CoreMedia if required.
 
+## RC7 FileTransfer — transport creation option trace
+Parent 1cf434fe575510fc8277b0a6d967944a6b2e258d. Reopened actual extracted Sender/CarKit binaries and disassembly, confirmed option initialization and diagnostic labels for dedicated socket, withoutReply and sendAsIs, separated CarKit builder from Sender's additional options. Unresolved imported keys/UUID remain; request targeted CoreMedia extraction only. Prior CI green 46085359570. No speculative implementation or companion/API changes, no releases. Estimates held. See docs/cpul-filetransfer-integration.md.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
