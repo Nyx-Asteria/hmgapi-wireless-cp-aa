@@ -1,3 +1,7 @@
+# RC8 native fixture length correction
+
+Source audit found a concrete harness defect: the valid uint32-max tuple "A:4294967295:1" is 14 bytes, but the fixture supplied 13, truncating the SDK field and necessarily failing the valid-case assertion. The overflow fixture also supplied 13 rather than 14. Use sizeof(literal)-1 for every tuple assertion to test the intended bytes, and correct diagnostic line-number positions. No production changes or assertion relaxation. Other failures, if any, remain visible through the new per-assertion diagnostics. Fresh CI and signing still required.
+
 # RC8 native assertion diagnostic
 
 Parent a5d70a7345b5c0460155617a1515fc3f575981ae: CI 46107142347 failed in the ARM emulator after successful linker repair, Java identity/codec tests and recipe-gate equivalence; production mod/package and pin jobs passed. First three printed serialized vectors match their expected text, but the former harness collapses all assertion and remaining vector failures into one generic message. This commit reports exact failing assertion line numbers and expected/actual values for every mismatching vector, preserving all assertions. No production changes and no test bypass. 73 assertion sites instrumented. Fresh CI/release required before signing; permanent-key artifact not yet available. Local sandbox has no QEMU or GitHub network access; diagnosis relies on actual CI output.

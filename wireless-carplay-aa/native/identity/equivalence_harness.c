@@ -21,7 +21,7 @@ static u32 at,value=42,mailbox,slot;
 static void semihost(u32 operation,const void *argument);
 static void fixture_failure(unsigned line){
     char msg[]="FAIL assertion at harness line 00000\n";
-    for(int i=34;i>=30;i--){msg[i]=(char)('0'+line%10);line/=10;}
+    for(int i=35;i>=31;i--){msg[i]=(char)('0'+line%10);line/=10;}
     semihost(4,msg);
     result|=1;
 }
@@ -229,16 +229,16 @@ int test_main(void){
     if(child_count!=6 || children[4].id!=5 || children[5].id!=6)FAIL_CHECK();
     stock_wireless_count=2;build_lookup=0;rc7_mode=7;
     // Native tuple parser mirrors the Java API, including uint32 bounds.
-    if(!theme_tuple_ok("THEME1:985:19.0",15)
-       || !theme_tuple_ok("A:4294967295:1",13)
-       || !theme_tuple_ok("A:0:1",5)
-       || theme_tuple_ok("A:4294967296:1",13)
-       || theme_tuple_ok("A:01:1",6)
-       || theme_tuple_ok("A::1",4)
-       || theme_tuple_ok(":1:1",4)
-       || theme_tuple_ok("A:1:",4)
-       || theme_tuple_ok("A.B:1:1",7)
-       || theme_tuple_ok("A:1:1:2",7))FAIL_CHECK();
+    if(!theme_tuple_ok("THEME1:985:19.0",sizeof("THEME1:985:19.0")-1)
+       || !theme_tuple_ok("A:4294967295:1",sizeof("A:4294967295:1")-1)
+       || !theme_tuple_ok("A:0:1",sizeof("A:0:1")-1)
+       || theme_tuple_ok("A:4294967296:1",sizeof("A:4294967296:1")-1)
+       || theme_tuple_ok("A:01:1",sizeof("A:01:1")-1)
+       || theme_tuple_ok("A::1",sizeof("A::1")-1)
+       || theme_tuple_ok(":1:1",sizeof(":1:1")-1)
+       || theme_tuple_ok("A:1:",sizeof("A:1:")-1)
+       || theme_tuple_ok("A.B:1:1",sizeof("A.B:1:1")-1)
+       || theme_tuple_ok("A:1:1:2",sizeof("A:1:1:2")-1))FAIL_CHECK();
     // Preserve OEM capability IDs; append only while a response is armed.
     unsigned char capabilities[8]={0};
     start_len=6;start_capability_seen=0;
