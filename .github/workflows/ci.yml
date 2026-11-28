@@ -40,6 +40,12 @@ jobs:
       - name: Native session USB export regression
         run: python3 wireless-carplay-aa/tests/session_export_test.py
 
+      - name: CPUL-derived session log policy regression
+        run: |
+          mkdir -p out/log-policy
+          javac --release 8 -d out/log-policy wireless-carplay-aa/src/hmgapi/mods/wireless/dipo/SessionLogPolicy.java wireless-carplay-aa/src/hmgapi/mods/wireless/dipo/PreSessionEvents.java wireless-carplay-aa/tests/SessionLogPolicyTest.java
+          java -cp out/log-policy hmgapi.mods.wireless.dipo.SessionLogPolicyTest
+
       - name: Java session export regression
         run: |
           mkdir -p out/session-export
