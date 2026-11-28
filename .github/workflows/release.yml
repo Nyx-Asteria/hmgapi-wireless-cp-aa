@@ -11,7 +11,7 @@ name: Release
 on:
   push:
     tags: ["v*"]
-    branches: [main]
+    branches: [main, rc8-recovery]
 
 permissions:
   contents: read

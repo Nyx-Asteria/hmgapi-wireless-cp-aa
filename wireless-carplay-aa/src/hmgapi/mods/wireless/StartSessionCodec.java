@@ -9,6 +9,10 @@ final class StartSessionCodec {
     private StartSessionCodec() {}
     static byte[] encode(String ssid,String passphrase,int channel,List<String> ips,int security,int port,
                          String deviceId,String publicKey,String sourceVersion,String sdkVersion,String assetId,long assetVersion) {
+        return encode(ssid,passphrase,channel,ips,security,port,deviceId,publicKey,sourceVersion,sdkVersion,assetId,assetVersion,true);
+    }
+    static byte[] encode(String ssid,String passphrase,int channel,List<String> ips,int security,int port,
+                         String deviceId,String publicKey,String sourceVersion,String sdkVersion,String assetId,long assetVersion,boolean omitEmptyAddresses) {
         if(channel < -1 || channel > 255)throw new IllegalArgumentException("channel");
         ByteArrayOutputStream wifi=new ByteArrayOutputStream();
         if(ssid!=null)param(wifi,0,str(ssid));
@@ -16,7 +20,7 @@ final class StartSessionCodec {
         if(channel>=0)param(wifi,2,new byte[]{(byte)channel});
         ByteArrayOutputStream list=new ByteArrayOutputStream();
         for(String ip:ips){byte[] b=str(ip);list.write(b,0,b.length);}
-        if(list.size()!=0)param(wifi,3,list.toByteArray());
+        if(list.size()!=0 || !omitEmptyAddresses)param(wifi,3,list.toByteArray());
         if(security>=0)param(wifi,4,new byte[]{(byte)security});
         ByteArrayOutputStream p=new ByteArrayOutputStream();
         param(p,1,wifi.toByteArray());

@@ -23,6 +23,8 @@ static u32 identity_mutex;
 static int configured,has_vehicle,has_theme,legacy_theme,has_ev;
 static u32 identity_built, identity_seen, identity_evidence;
 static int theme_children_active;
+/* Restart-scoped opt-ins; set before first configure. Host fixtures opt in explicitly. */
+static unsigned int rc7_mode;
 static char display_name[321];
 static char theme[97];
 static u32 dc_w,ac_w,engine=2,connector,dc_connector,ac_connector;
@@ -62,7 +64,7 @@ static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
         if(id==6)identity_seen|=2;
         if(more)*more=0;return theme;
     }
-    return (stock_wireless_lookup?stock_wireless_lookup:wireless_lookup)(id,type,n,key,more);
+    return ((rc7_mode&1) && stock_wireless_lookup?stock_wireless_lookup:wireless_lookup)(id,type,n,key,more);
 }
 #include "start_session.h"
 
@@ -79,6 +81,11 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
            parameter 6 and leaves stock parameter 5 intact. Replace rather
            than append duplicate IDs if the OEM already supplies them. */
         u32 used=0;
+        if(!(rc7_mode&2) && legacy_theme){
+            for(u32 i=0;i<n;i++)wireless_copy[i]=stock[i];
+            wireless_copy[n]=parameter(5,12);wireless_copy[n+1]=parameter(6,10);
+            *count=(u16)(n+2);if(more)*more=0;return wireless_copy;
+        }
         for(u32 i=0;i<n;i++)
             if(stock[i].id!=6 && !(legacy_theme && stock[i].id==5))wireless_copy[used++]=stock[i];
         if(legacy_theme)wireless_copy[used++]=parameter(5,12);
@@ -90,8 +97,9 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
 static void *identity_value(u16 id,u16 type,u16 *n,void *key,int *more){
     if(id==20 && has_vehicle){if(more)*more=0;return (void*)info_value;}
     if(id==21 && has_ev){if(more)*more=0;return (void*)status_value;}
-    Lookup original=build_lookup?build_lookup:root_lookup;
+    Lookup original=(rc7_mode&1) && build_lookup?build_lookup:root_lookup;
     if(id==WIRELESS_GROUP && has_theme && wireless_lookup && stock_children){
+        if(!(rc7_mode&1)){if(more)*more=0;return (void*)wireless_value;}
         void *stock=original(id,type,n,key,more);
         stock_wireless_lookup=(Lookup)stock;
         // Root lookup can precede child-table selection. Defer the decision
@@ -227,6 +235,10 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     unlock_mutex(&identity_mutex);return result;
 }
 
+JNIEXPORT void JNICALL Java_hmgapi_mods_wireless_NativeIdentity_compatibilityMode(JNIEnv *env,jclass cls,jint mode){
+    (void)env;(void)cls;
+    if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE))rc7_mode=(unsigned int)mode&7U;
+}
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_configure(JNIEnv *env,jclass cls,jbyteArray name,jint engine_type,jint dc_type,jint dc,jint ac_type,jint ac,jbyteArray theme_id,jboolean legacy){
     (void)cls;if(!name || !theme_id)return -12;jsize n=(*env)->GetArrayLength(env,name),t=(*env)->GetArrayLength(env,theme_id);
     if(n>320 || t>96)return -12;char bytes[321],theme_bytes[97];

@@ -120,6 +120,7 @@ static u32 capability_build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 coun
 }
 static void semihost(u32 operation,const void *argument);
 int test_main(void){
+    rc7_mode=7; /* Existing RC7 fixture expectations remain explicit. */
     root[0]=parameter(20,13);root[0].children=(u32)identity_children;
     root[1]=parameter(21,13);root[1].children=(u32)identity_children;
     root[0].used=root[1].used=0;

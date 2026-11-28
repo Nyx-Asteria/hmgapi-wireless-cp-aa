@@ -40,6 +40,86 @@
       "title": "Kia K5 gasoline vehicle identity",
       "apply": "restart",
       "description": "Opt in only on a gasoline Kia K5. Advertise Kia K5 and gasoline engine type without EV charging connectors. Off preserves OEM vehicle identity and allows existing companion EV contributions."
+    },
+    {
+      "key": "rc7_force_vehicle_groups",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 unconditional vehicle groups",
+      "apply": "restart",
+      "description": "Force both OEM vehicle capability flags even without a vehicle contribution."
+    },
+    {
+      "key": "rc7_wireless_callbacks",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 dynamic identity callbacks",
+      "apply": "restart",
+      "description": "Select the OEM callback dynamically instead of RC6 fixed lookup."
+    },
+    {
+      "key": "rc7_theme_replace",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 replace theme fields",
+      "apply": "restart",
+      "description": "Replace existing theme parameters rather than RC6 legacy append."
+    },
+    {
+      "key": "rc7_capability_probe",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 capability sizing probe",
+      "apply": "restart",
+      "description": "Enable the RC7 duplicate-detection sizing probe instead of bounded RC6 append."
+    },
+    {
+      "key": "rc7_rearm",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 identity rearm lifecycle",
+      "apply": "restart",
+      "description": "Shut down the native gate before replacing an active contribution."
+    },
+    {
+      "key": "rc7_early_addresses",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 early StartSession",
+      "apply": "restart",
+      "description": "Allow preparation before a network address is known."
+    },
+    {
+      "key": "rc7_optional_version",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 optional receiver version",
+      "apply": "restart",
+      "description": "Allow StartSession without a measured receiver source version."
+    },
+    {
+      "key": "rc7_omit_channel",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 omit unknown Wi-Fi channel",
+      "apply": "restart",
+      "description": "Omit an unknown channel instead of encoding zero."
+    },
+    {
+      "key": "rc7_omit_empty_addresses",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 omit empty address list",
+      "apply": "restart",
+      "description": "Omit the address-list field when empty (only matters with early StartSession)."
+    },
+    {
+      "key": "rc7_directory_recorder",
+      "type": "toggle",
+      "default": false,
+      "title": "RC7 directory session recorder",
+      "apply": "restart",
+      "description": "Use the categorized RC7 session recorder instead of the legacy journal. Independent startup recording remains active."
     }
   ]
 }

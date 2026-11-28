@@ -81,21 +81,28 @@ public final class Dipo {
     static final ThreadLocal<String> SESSION = new ThreadLocal<String>();
     static final ThreadLocal<Boolean> NO_ADDRESS = new ThreadLocal<Boolean>();
 
+    private static StartupRecording startup;
+    private static volatile boolean projectionStarted;
     static void log(String m) {
         mod.log(m);
         if (recording != null) recording.record(m);
+        else if(journal!=null)journal.record(m);
+        if(startup!=null && !projectionStarted)startup.record(m);
     }
 
     static void error(String m, Throwable t) {
         mod.error(m, t);
         if (recording != null) recording.error(m + " error=" + t.getClass().getSimpleName());
+        else if(journal!=null)journal.record(m+" error="+t.getClass().getSimpleName());
+        if(startup!=null)startup.record(m+" error="+t.getClass().getSimpleName());
     }
 
     /** Wireless.appLoaded, in DiPO's process */
     public static void start(ModContext m, LoadedApp a) {
         mod = m;
         app = a;
-        if (a.context != null && recording == null) {
+        if(a.context!=null && startup==null)try{startup=new StartupRecording(a.context,"wcp-startup-bundles");}catch(Throwable t){m.error("RC8 DiPO startup recorder unavailable",t);}
+        if (a.context != null && recording == null && m.settingBoolean("rc7_directory_recorder",false)) {
             try { recording = new SessionRecording(a.context, "wcp-session-bundles", false); }
             catch (Throwable t) { m.error("Directory session recorder unavailable", t); }
         }
@@ -108,6 +115,7 @@ public final class Dipo {
         nowPlaying = bridge;
         CarPlayLog.on = m.settingBoolean("carplay_log", false);
         CarPlayLog.apply("start");
+        log("RC8 DiPO initialization bridge="+bridge+" directoryRecorder="+(recording!=null));
         try { installSessionJournal(m, a); }
         catch (Throwable t) { m.error("CarPlay session journal hook unavailable", t); }
         // the CarPlay libraries, patched in memory once DiPO loads them (files stay stock)
@@ -153,12 +161,14 @@ public final class Dipo {
      * No sleep, network operation, reconnect, or retry is performed here.
      */
     private static void journalEvent(String action,String detail) {
+        if(startup!=null)startup.record("MILESTONE "+action+" "+detail);
         if (journal != null) {
             // The legacy journal now carries native capture lifecycle only.
             // Its marker protocol is still consumed by the root collector.
-            if ("beginAttempt".equals(action) && CarPlayLog.on) journal.beginAttempt(detail);
-            else if ("start".equals(action) && CarPlayLog.on) journal.start(detail);
+            if ("beginAttempt".equals(action) && (recording==null || CarPlayLog.on)) journal.beginAttempt(detail);
+            else if ("start".equals(action) && (recording==null || CarPlayLog.on)) journal.start(detail);
             else if ("end".equals(action)) journal.end(detail);
+            else if(recording==null)journal.record(detail);
         }
         if (recording != null) {
             if ("beginAttempt".equals(action)) recording.beginAttempt(detail);
@@ -174,6 +184,7 @@ public final class Dipo {
         if (Points.has("dipo.carplay.session_created")) {
             m.hook(a.classLoader, "dipo.carplay.session_created", new MethodHook() {
                 @Override protected void beforeHookedMethod(Param p) {
+                    projectionStarted=false;
                     journalEvent("beginAttempt", "session creation");
                     journalEvent("record", "MILESTONE session_created enter");
                 }
@@ -191,7 +202,7 @@ public final class Dipo {
             }
             @Override protected void afterHookedMethod(Param p) {
                 if (p.hasThrowable()) journalEvent("end", "session startup threw");
-                else journalEvent("record", "MILESTONE session_started returned");
+                else {journalEvent("record", "MILESTONE session_started returned");projectionStarted=true;if(startup!=null)startup.rotate();}
             }
         });
         m.hook(a.classLoader, "dipo.carplay.session_finalized", new MethodHook() {
@@ -200,6 +211,7 @@ public final class Dipo {
                         (p.args.length > 0 ? p.args[0] : "unknown"));
             }
             @Override protected void afterHookedMethod(Param p) {
+                projectionStarted=false;
                 journalEvent("record", "MILESTONE session_finalized " + (p.hasThrowable() ? "threw" : "returned"));
                 journalEvent("end", "session finalized type=" +
                         (p.args.length > 0 ? p.args[0] : "unknown"));

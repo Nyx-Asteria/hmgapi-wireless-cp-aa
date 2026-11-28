@@ -22,6 +22,10 @@ public final class StartSessionCodecTest {
             StartSessionCodec.encode("S","p",256,Arrays.asList("192.168.0.1"),-1,7000,"dev","key","1",null,null,0);
             throw new AssertionError("out-of-range channel accepted");
         }catch(IllegalArgumentException expected){}
+        byte[] zeroChannel=StartSessionCodec.encode("S","p",0,Arrays.asList("192.168.0.1"),-1,7000,"dev","key","1",null,null,0,false);
+        check(zeroChannel.length==unknownChannel.length+5 && hex(zeroChannel).contains("0005000200"),"RC6 zero channel sentinel");
+        byte[] emptyField=StartSessionCodec.encode("S","p",-1,java.util.Collections.<String>emptyList(),-1,7000,"dev","key",null,null,null,0,false);
+        check(hex(emptyField).contains("00040003"),"RC6 empty address field");
         byte[] early=StartSessionCodec.encode("S","p",-1,java.util.Collections.<String>emptyList(),-1,7000,"dev","key",null,theme.sdkVersion,theme.assetIdentifier,theme.assetVersion);
         byte[] refreshed=StartSessionCodec.encode("S","p",-1,Arrays.asList("fe80::1"),-1,7000,"dev","key","950.7.1",theme.sdkVersion,theme.assetIdentifier,theme.assetVersion);
         check(hex(early).equals("404000524301001000010006000053000006000170000008000200001b580008000364657600000800046b6579000009000631392e3000001b0007000f0000343443394641333145430000080001000003d9"),"early optional fields wire vector");

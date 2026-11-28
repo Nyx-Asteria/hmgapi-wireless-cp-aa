@@ -32,7 +32,7 @@ final class StartSession {
         Preparation(byte[] message,Blocker blocker){this.message=message;this.blocker=blocker;}
     }
     private static Preparation blocked(Blocker blocker){return new Preparation(null,blocker);}
-    static Preparation prepare(Context context, ThemeIdentity theme) {
+    static Preparation prepare(Context context, ThemeIdentity theme, ModContext mod) {
         if(context==null)return blocked(Blocker.CONTEXT);
         if(theme==null)return blocked(Blocker.THEME);
         if(!verified())return blocked(Blocker.FIRMWARE);
@@ -43,7 +43,10 @@ final class StartSession {
             else if(line.startsWith("sourceVersion="))sourceVersion=line.substring(14);
         }
         if(!valid(pi)||!valid(deviceId))return blocked(Blocker.RECEIVER_IDENTITY);
-        if(!valid(sourceVersion))sourceVersion=null; // optional; never fabricate a receiver version
+        if(!valid(sourceVersion)) {
+            if(!mod.settingBoolean("rc7_optional_version",false))return blocked(Blocker.RECEIVER_IDENTITY);
+            sourceVersion=null;
+        } // optional; never fabricate a receiver version
         Object config;
         try{
             Object wm=context.getSystemService("wifi");
@@ -57,9 +60,11 @@ final class StartSession {
         if(!valid(ssid)||!valid(psk))return blocked(Blocker.WIFI_CREDENTIALS);
         List<String> ips=addresses("wlan0");
         // Early preparation can precede address assignment. Refresh supplies addresses when available.
+        if(ips.isEmpty() && !mod.settingBoolean("rc7_early_addresses",false))return blocked(Blocker.NETWORK_ADDRESS);
         int channel=channel(config);
+        if(channel<0 && !mod.settingBoolean("rc7_omit_channel",false))channel=0;
         return new Preparation(StartSessionCodec.encode(ssid,psk,channel,ips,-1,7000,deviceId,pi,sourceVersion,
-                theme.sdkVersion,theme.assetIdentifier,theme.assetVersion),Blocker.NONE);
+                theme.sdkVersion,theme.assetIdentifier,theme.assetVersion,mod.settingBoolean("rc7_omit_empty_addresses",false)),Blocker.NONE);
     }
     private static boolean valid(String s){return s!=null && !s.isEmpty() && s.indexOf(0)<0;}
     private static String field(Object o,String name){

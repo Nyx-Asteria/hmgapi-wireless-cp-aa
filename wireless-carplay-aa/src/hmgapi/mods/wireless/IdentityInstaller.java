@@ -10,6 +10,9 @@ import hmgapi.mods.wireless.api.CarPlayIdentification;
 final class IdentityInstaller {
     private IdentityInstaller() {}
     private static boolean loaded;
+    private static hmgapi.mods.wireless.dipo.StartupRecording startup;
+    private static void log(ModContext mod,String message){ mod.log(message); if(startup!=null) startup.record(message); }
+    private static boolean groupsWanted(ModContext mod, IdentityRegistry registry){ return mod.enabled() && (mod.settingBoolean("rc7_force_vehicle_groups",false) || registry.vehicle()!=null); }
     private static volatile boolean armed;
     private static boolean suspended, shutdownPending;
     private static final ResumeRecovery resumeRecovery=new ResumeRecovery();
@@ -26,11 +29,13 @@ final class IdentityInstaller {
 
     static void install(final ModContext mod, final LoadedApp app, IdentityRegistry registry) {
         final IdentityRegistry contributions = registry;
+        if(app.context!=null && startup==null)try { startup=new hmgapi.mods.wireless.dipo.StartupRecording(app.context,"wcp-iap2-startup-bundles"); }catch(Throwable t){mod.error("RC8 iAP2 startup recorder unavailable",t);}
+        log(mod,"RC8 iAP2 identity installer entering");
         registry.onChange(new Runnable() {
             @Override public void run() {
                 try {
                     apply(mod, app, contributions);
-                    if(mod.enabled())enableGroups(app.classLoader);
+                    if(groupsWanted(mod,contributions))enableGroups(app.classLoader);
                 }
                 catch (Throwable t) { failure(mod, "CarPlay identification contribution change", t); }
             }
@@ -55,16 +60,16 @@ final class IdentityInstaller {
                     // point runs after it and before the identification message is built.
                     if (!armed) apply(mod, app, contributions);
                     else refreshStart(mod, app, contributions);
-                    if(mod.enabled())enableGroups(app.classLoader);
+                    if(groupsWanted(mod,contributions))enableGroups(app.classLoader);
                 } catch (Throwable t) {
                     failure(mod, "CarPlay identification late initialization", t);
                 }
             }
         };
         mod.hook(app.classLoader, "iap2.init_info.check_supports_features", groups);
-        try { if(mod.enabled())enableGroups(app.classLoader); }
+        try { if(groupsWanted(mod,contributions))enableGroups(app.classLoader); }
         catch (Exception e) { mod.error("CarPlay stock vehicle groups unavailable; retaining stock behavior", e); }
-        mod.log(armed ? "CarPlay identification: contribution serializer installed"
+        log(mod,armed ? "CarPlay identification: contribution serializer installed"
                 : "CarPlay identification: waiting for iAP2 native initialization");
         mod.hook(app.classLoader, "iap2.service.receive_connect", new MethodHook() {
             @Override protected void beforeHookedMethod(Param p) {
@@ -75,7 +80,7 @@ final class IdentityInstaller {
                 } catch (Throwable t) { failure(mod, "CarPlayStart Bluetooth pre-connect", t); }
                 // Stock vehicle groups are independent of the optional session extension.
                 // A missing group hook must not prevent session preparation.
-                try { if(mod.enabled())enableGroups(app.classLoader); }
+                try { if(groupsWanted(mod,contributions))enableGroups(app.classLoader); }
                 catch (Throwable t) { failure(mod, "CarPlay stock vehicle groups before connect", t); }
             }
         });
@@ -92,7 +97,7 @@ final class IdentityInstaller {
         if(armed && armedGeneration==snapshot.generation) { refreshStart(mod,app,registry); return; }
         armed=false; armedGeneration=-1;
         try {
-        if(loaded){shutdownPending=true;if(!finishShutdown(mod))throw new IllegalStateException("native shutdown pending");}
+        if(loaded && (mod.settingBoolean("rc7_rearm",false) || (vehicle==null && theme==null))){shutdownPending=true;if(!finishShutdown(mod))throw new IllegalStateException("native shutdown pending");}
         lastStart=null;
         withdrawal.setPending(loaded);
         if(vehicle==null && theme==null){resumeRecovery.stop();return;}
@@ -110,7 +115,14 @@ final class IdentityInstaller {
             if (vehicle.engineType == CarPlayIdentification.VehicleIdentity.ENGINE_ELECTRIC && (dcType == -1 || acType == -1))
                 throw new IllegalStateException("CarPlay EV identity requires one DC and one AC connector");
         }
-        if (!loaded) { NativeIdentity.load(); loaded = true; }
+        if (!loaded) {
+            NativeIdentity.load();
+            int mode=(mod.settingBoolean("rc7_wireless_callbacks",false)?1:0)
+                |(mod.settingBoolean("rc7_theme_replace",false)?2:0)
+                |(mod.settingBoolean("rc7_capability_probe",false)?4:0);
+            NativeIdentity.compatibilityMode(mode); loaded = true;
+            log(mod,"RC8 native RC7 opt-in bits="+mode);
+        }
         try {
             byte[] name = vehicle == null ? new byte[0] : vehicle.displayName.getBytes("UTF-8");
             byte[] themeId = theme == null ? new byte[0] : theme.encoded().getBytes("US-ASCII");
@@ -125,9 +137,9 @@ final class IdentityInstaller {
             armed = true;
             resumeRecovery.stop();
             armedGeneration=snapshot.generation;
-            mod.log("CarPlay identity: generation="+armedGeneration+" armed");
+            log(mod,"CarPlay identity: generation="+armedGeneration+" armed");
             if (theme != null) {
-                mod.log("CarPlay theme: configured to report as " + theme.encoded()
+                log(mod,"CarPlay theme: configured to report as " + theme.encoded()
                         + " (legacy parameters 5/6; verified K5 format)");
             }
             refreshStart(mod, app, registry);
@@ -190,7 +202,7 @@ final class IdentityInstaller {
 
     private static void notice(ModContext mod, String status) {
         if (!status.equals(lastStartNotice)) {
-            mod.log("CarPlayStart: " + status);
+            log(mod,"CarPlayStart: " + status);
             lastStartNotice = status;
         }
     }
@@ -210,7 +222,7 @@ final class IdentityInstaller {
             return;
         }
         try {
-            StartSession.Preparation preparation=StartSession.prepare(app.context, theme);
+            StartSession.Preparation preparation=StartSession.prepare(app.context, theme, mod);
             byte[] msg=preparation.message;
             if (msg == null) {
                 if (lastStart != null && !clearStart(mod,registry)) return;
@@ -251,7 +263,7 @@ final class IdentityInstaller {
                                     // Do not consume the configure budget while shutdown is blocked.
                                 }else if(!suspended && !resumeRecovery.canAttempt()){
                                     resumeRecovery.stop();
-                                    mod.log("CarPlay identity: automatic resume retries exhausted; next connection may retry");
+                                    log(mod,"CarPlay identity: automatic resume retries exhausted; next connection may retry");
                                 }else{
                                     try{apply(mod,app,registry);}
                                     catch(Throwable t){failure(mod,"CarPlay identity resume",t);}
@@ -268,12 +280,12 @@ final class IdentityInstaller {
                                 if(armed && observed>=0 && registry.identityStatus().readiness==CarPlayIdentification.Readiness.ARMED
                                         && (observed&64)!=0
                                         && registry.report(armedGeneration,CarPlayIdentification.Readiness.ADVERTISED,"native identification builder completed; delivery not confirmed")) {
-                                    mod.log("CarPlay identity: generation="+armedGeneration+" identification built; phone acceptance unconfirmed");
+                                    log(mod,"CarPlay identity: generation="+armedGeneration+" identification built; phone acceptance unconfirmed");
                                 }
                                 int currentEvidence=observed&7;
                                 if(observed>=0){
                                 if(currentEvidence!=evidence || armedGeneration!=evidenceGeneration){
-                                    mod.log("CarPlay identity: generation="+armedGeneration
+                                    log(mod,"CarPlay identity: generation="+armedGeneration
                                             +" vehicle values built="+((currentEvidence&5)==5)
                                             +" theme value built="+((currentEvidence&2)!=0));
                                     evidence=currentEvidence;evidenceGeneration=armedGeneration;
@@ -283,7 +295,7 @@ final class IdentityInstaller {
                                     registry.reportNegotiation(armedGeneration,currentEvidence,capability,
                                             (observed&32)!=0 && lastStart!=null && !withdrawal.pending());
                                 if(capability!=capabilityEvidence){
-                                    mod.log("CarPlayStart: capability builder evidence sent="+((capability&1)!=0)
+                                    log(mod,"CarPlayStart: capability builder evidence sent="+((capability&1)!=0)
                                             +" received="+((capability&2)!=0)+"; delivery unconfirmed");
                                     capabilityEvidence=capability;
                                 }
@@ -293,7 +305,7 @@ final class IdentityInstaller {
                                 int s=NativeIdentity.startSessionStatus(5), l=NativeIdentity.startSessionStatus(6);
                                 int ok=NativeIdentity.startSessionStatus(7), rejected=NativeIdentity.startSessionStatus(8);
                                 if (o != offers || n != sends || p != noPayload || a != allocation || s != stale || l != lock || ok != dispatched || rejected != refused) {
-                                    mod.log("CarPlayStart: availability offers=" + o + " answers attempted=" + n
+                                    log(mod,"CarPlayStart: availability offers=" + o + " answers attempted=" + n
                                             + " OEM dispatch accepted=" + ok + " OEM dispatch refused=" + rejected
                                             + " no payload=" + p + " allocation failures=" + a
                                             + " stale drops=" + s + " lock failures=" + l
@@ -305,7 +317,7 @@ final class IdentityInstaller {
                         Thread.sleep(2000);
                     }
                 } catch (InterruptedException ended) { Thread.currentThread().interrupt(); }
-                catch (Throwable error) { mod.log("CarPlayStart: watcher stopped (" + error.getClass().getSimpleName() + ")"); }
+                catch (Throwable error) { log(mod,"CarPlayStart: watcher stopped (" + error.getClass().getSimpleName() + ")"); }
                 finally {
                     synchronized (IdentityInstaller.class) {
                         try{suspend(mod,registry);}finally{watcherStarted = false;}
@@ -318,8 +330,9 @@ final class IdentityInstaller {
     }
 
     private static void failure(ModContext mod, String message, Throwable t) {
+        if(startup!=null)startup.record(message+" error="+t.getClass().getSimpleName());
         if (t instanceof NativeFailure && ((NativeFailure) t).code == -21)
-            mod.log(message + ": native gate not ready; will retry before identification");
+            log(mod,message + ": native gate not ready; will retry before identification");
         else mod.error(message, t);
     }
 

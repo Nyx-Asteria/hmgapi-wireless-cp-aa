@@ -50,6 +50,7 @@ public final class SessionExporter {
         boolean wcp = "wcp".equals(args[0]);
         File files = new File("/data/data/com.daudio.app.dipo/files");
         String prefix = wcp ? "WCP-LOGS" : "TBT-LOGS";
+        if(wcp)System.out.println("WCP exporter 2.2.1-rc.8 provider-independent SHA-256");
         String previous = "";
         while (true) {
             String error = "";
@@ -74,6 +75,10 @@ public final class SessionExporter {
                         }
                         try { exportBundles(new File(files, args[0] + "-session-bundles"), dest, guard); }
                         catch (Exception e) { if (first == null) first = e; }
+                        if(wcp){
+                            try{exportBundles(new File(files,"wcp-startup-bundles"),child(dest,"startup-dipo"),guard);}catch(Exception ex){if(first==null)first=ex;}
+                            try{exportBundles(new File("/data/data/com.tcc.iap2server/files/wcp-iap2-startup-bundles"),child(dest,"startup-iap2"),guard);}catch(Exception ex){if(first==null)first=ex;}
+                        }
                         if (!wcp) {
                             try { exportBundles(new File(files, "stbt-third-party-bundles"), child(dest, "third-party-navigation"), guard); }
                             catch (Exception e) { if (first == null) first = e; }
