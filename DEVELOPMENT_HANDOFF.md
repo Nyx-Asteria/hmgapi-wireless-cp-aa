@@ -1,3 +1,7 @@
+# RC9 delayed SPP recovery fencing
+
+Fence existing SPP-present recovery with Bluetooth attachment generation, address, enabled state, USB exclusion and active projection checks, including revalidation after the Binder query. No new connection attempts. Parent CI 46178639220 in progress at inspection. Fresh CI and targeted lifecycle fixture outstanding. Publication held until new vehicle logs reviewed; no companion edits.
+
 # RC9 projection teardown attachment recovery
 
 Verified parent 16d790de4047eedf8e376c0b9ae710201360a60d full CI passed 46176606513 including ARM combined initialization fixtures. On wireless projection finalization invalidate stale Bluetooth attachment state before existing detach and SPP-present recovery. This removes the stale sSession gate without adding new Bluetooth connection attempts or interpreting undocumented finalization types. Existing USB and address checks remain. Fresh CI required; actual inactivity causality and user-disconnect behavior require vehicle verification. Publication held pending new logs. No companion edits.

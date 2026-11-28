@@ -263,15 +263,24 @@ final class Bridge {
         });
     }
 
+    static synchronized void recoverExistingSpp(String addr, int generation) {
+        if (btGeneration.get() != generation || !addr.equals(sAddr)
+                || sUsb || sSession || sCpClient || sCpWireless || !enabled()) return;
+        onSppUp(addr);
+    }
+
     static void onUsbGone() {
         final String addr = sAddr;
-        if (addr == null || sSession) return;
+        final int generation = btGeneration.get();
+        if (addr == null || sSession || sCpClient || sCpWireless || sUsb || !enabled()) return;
         handler().postDelayed(new Runnable() {
             @Override
             public void run() {
                 try {
                     HfDeviceBTCMManager m = sBtcm;
-                    if (m != null && !sUsb && !sSession && addr.equals(sAddr) && m.IbtcmIsSppConnectedDevice(addr)) onSppUp(addr);
+                    if (btGeneration.get() != generation || sUsb || sSession
+                            || sCpClient || sCpWireless || !enabled() || !addr.equals(sAddr)) return;
+                    if (m != null && m.IbtcmIsSppConnectedDevice(addr)) recoverExistingSpp(addr, generation);
                 } catch (Throwable t) {
                     error("onUsbGone", t);
                 }
