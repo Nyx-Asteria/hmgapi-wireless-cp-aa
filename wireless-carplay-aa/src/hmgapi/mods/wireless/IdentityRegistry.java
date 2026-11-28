@@ -14,6 +14,7 @@ final class IdentityRegistry implements CarPlayIdentification {
     private boolean sessionStart;
     private Logger logger;
     private long generation;
+    private boolean suspended;
     private IdentityStatus status=new IdentityStatus(0,Readiness.UNAVAILABLE,"no contributions");
 
     @Override public synchronized IdentityStatus identityStatus() { return status; }
@@ -35,13 +36,20 @@ final class IdentityRegistry implements CarPlayIdentification {
 
     private void invalidate() {
         generation++;
-        status=new IdentityStatus(generation,vehicles.isEmpty() && themes.isEmpty()
-                ? Readiness.UNAVAILABLE : Readiness.REGISTERED,"contributions changed");
+        status=new IdentityStatus(generation,suspended || (vehicles.isEmpty() && themes.isEmpty())
+                ? Readiness.UNAVAILABLE : Readiness.REGISTERED,suspended?"identity suspended":"contributions changed");
+    }
+
+    /** Preserve contributions but invalidate all evidence across lifecycle transitions. */
+    synchronized void setSuspended(boolean value) {
+        if(suspended==value)return;
+        suspended=value;
+        invalidate();
     }
 
     /** A delayed native callback cannot mark a newer contribution as active. */
     synchronized boolean report(long expected, Readiness readiness, String reason) {
-        if(expected!=generation) return false;
+        if(expected!=generation || suspended) return false;
         status=new IdentityStatus(generation,readiness,reason);
         return true;
     }

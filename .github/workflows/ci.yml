@@ -63,3 +63,9 @@ jobs:
           mkdir -p out/start-withdrawal
           javac --release 8 -d out/start-withdrawal wireless-carplay-aa/src/hmgapi/mods/wireless/StartWithdrawal.java wireless-carplay-aa/tests/StartWithdrawalTest.java
           java -cp out/start-withdrawal hmgapi.mods.wireless.StartWithdrawalTest
+
+      - name: Native identity resume recovery regression
+        run: |
+          mkdir -p out/resume-recovery
+          javac --release 8 -d out/resume-recovery wireless-carplay-aa/src/hmgapi/mods/wireless/ResumeRecovery.java wireless-carplay-aa/tests/ResumeRecoveryTest.java
+          java -cp out/resume-recovery hmgapi.mods.wireless.ResumeRecoveryTest

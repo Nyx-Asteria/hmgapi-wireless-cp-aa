@@ -9,7 +9,10 @@ import hmgapi.mods.wireless.api.CarPlayIdentification;
 /** Arms the native serializer from one validated snapshot of all contributions. */
 final class IdentityInstaller {
     private IdentityInstaller() {}
-    private static boolean loaded, armed;
+    private static boolean loaded;
+    private static volatile boolean armed;
+    private static boolean suspended, shutdownPending;
+    private static final ResumeRecovery resumeRecovery=new ResumeRecovery();
     private static long armedGeneration=-1;
     private static byte[] lastStart;
     private static final StartWithdrawal withdrawal=new StartWithdrawal();
@@ -27,7 +30,7 @@ final class IdentityInstaller {
             @Override public void run() {
                 try {
                     apply(mod, app, contributions);
-                    enableGroups(app.classLoader);
+                    if(mod.enabled())enableGroups(app.classLoader);
                 }
                 catch (Throwable t) { failure(mod, "CarPlay identification contribution change", t); }
             }
@@ -52,14 +55,14 @@ final class IdentityInstaller {
                     // point runs after it and before the identification message is built.
                     if (!armed) apply(mod, app, contributions);
                     else refreshStart(mod, app, contributions);
-                    enableGroups(app.classLoader);
+                    if(mod.enabled())enableGroups(app.classLoader);
                 } catch (Throwable t) {
                     failure(mod, "CarPlay identification late initialization", t);
                 }
             }
         };
         mod.hook(app.classLoader, "iap2.init_info.check_supports_features", groups);
-        try { enableGroups(app.classLoader); }
+        try { if(mod.enabled())enableGroups(app.classLoader); }
         catch (Exception e) { mod.error("CarPlay stock vehicle groups unavailable; retaining stock behavior", e); }
         mod.log(armed ? "CarPlay identification: contribution serializer installed"
                 : "CarPlay identification: waiting for iAP2 native initialization");
@@ -72,7 +75,7 @@ final class IdentityInstaller {
                 } catch (Throwable t) { failure(mod, "CarPlayStart Bluetooth pre-connect", t); }
                 // Stock vehicle groups are independent of the optional session extension.
                 // A missing group hook must not prevent session preparation.
-                try { enableGroups(app.classLoader); }
+                try { if(mod.enabled())enableGroups(app.classLoader); }
                 catch (Throwable t) { failure(mod, "CarPlay stock vehicle groups before connect", t); }
             }
         });
@@ -80,6 +83,9 @@ final class IdentityInstaller {
     }
 
     private static synchronized void apply(ModContext mod, LoadedApp app, IdentityRegistry registry) {
+        if(!mod.enabled()){suspend(mod,registry);return;}
+        if(shutdownPending && !finishShutdown(mod))return;
+        if(suspended){registry.setSuspended(false);suspended=false;resumeRecovery.begin();}
         IdentityRegistry.Snapshot snapshot=registry.snapshot();
         CarPlayIdentification.VehicleIdentity vehicle=snapshot.vehicle;
         CarPlayIdentification.ThemeIdentity theme=snapshot.theme;
@@ -89,7 +95,7 @@ final class IdentityInstaller {
         if(loaded) NativeIdentity.shutdown();
         lastStart=null;
         withdrawal.setPending(loaded);
-        if(vehicle==null && theme==null) return;
+        if(vehicle==null && theme==null){resumeRecovery.stop();return;}
         int dcType = -1, dcPower = 0, acType = -1, acPower = 0;
         if (vehicle != null) {
             for (CarPlayIdentification.Connector connector : vehicle.connectors) {
@@ -117,6 +123,7 @@ final class IdentityInstaller {
             }
             withdrawal.setPending(false); // successful native configure clears its payload
             armed = true;
+            resumeRecovery.stop();
             armedGeneration=snapshot.generation;
             mod.log("CarPlay identity: generation="+armedGeneration+" armed");
             if (theme != null) {
@@ -129,10 +136,37 @@ final class IdentityInstaller {
         }
         } catch(Throwable error) {
             armed=false; armedGeneration=-1; lastStart=null; withdrawal.setPending(loaded);
-            if(loaded) try { NativeIdentity.shutdown(); } catch(Throwable ignored) {}
+            if(loaded){shutdownPending=true;finishShutdown(mod);}
+            // Only retry the known transient native-gate error automatically.
+            resumeRecovery.failed(error instanceof NativeFailure ? ((NativeFailure)error).code : 0);
             registry.report(snapshot.generation,CarPlayIdentification.Readiness.FAILED,
                     error instanceof NativeFailure ? "native configure="+((NativeFailure)error).code : error.getClass().getSimpleName());
             throw error;
+        }
+    }
+
+    private static synchronized void suspend(ModContext mod,IdentityRegistry registry) {
+        if(!suspended){
+            suspended=true;
+            resumeRecovery.stop();
+            registry.setSuspended(true);
+            armed=false;armedGeneration=-1;
+            lastStart=null;
+            shutdownPending=loaded;
+            withdrawal.setPending(loaded);
+        }
+        if(shutdownPending)finishShutdown(mod);
+        if(withdrawal.pending())clearStart(mod);
+    }
+
+    private static boolean finishShutdown(ModContext mod){
+        try {
+            NativeIdentity.shutdown();
+            shutdownPending=false;
+            return true;
+        }catch(Throwable error){
+            notice(mod,"native shutdown pending ("+error.getClass().getSimpleName()+")");
+            return false;
         }
     }
 
@@ -160,6 +194,8 @@ final class IdentityInstaller {
     }
 
     private static synchronized void refreshStart(ModContext mod, LoadedApp app, IdentityRegistry registry) {
+        if(!mod.enabled()){suspend(mod,registry);return;}
+        if(suspended)return;
         if (!loaded) return;
         if(withdrawal.pending() && !clearStart(mod))return;
         if(!armed)return;
@@ -203,8 +239,25 @@ final class IdentityInstaller {
             @Override public void run() {
                 int offers = 0, sends = 0, noPayload = 0, allocation = 0, stale = 0, lock = 0;
                 try {
-                    while (mod.enabled()) {
-                        refreshStart(mod, app, registry);
+                    while (!Thread.currentThread().isInterrupted()) {
+                        synchronized(IdentityInstaller.class){
+                            if(!mod.enabled())suspend(mod,registry);
+                            else if(suspended || resumeRecovery.pending()){
+                                if(shutdownPending && !finishShutdown(mod)){
+                                    // Do not consume the configure budget while shutdown is blocked.
+                                }else if(!suspended && !resumeRecovery.canAttempt()){
+                                    resumeRecovery.stop();
+                                    mod.log("CarPlay identity: automatic resume retries exhausted; next connection may retry");
+                                }else{
+                                    try{apply(mod,app,registry);}
+                                    catch(Throwable t){failure(mod,"CarPlay identity resume",t);}
+                                    resumeRecovery.attempted();
+                                }
+                            }else{
+                                if(shutdownPending)finishShutdown(mod);
+                                refreshStart(mod,app,registry);
+                            }
+                        }
                         synchronized (IdentityInstaller.class) {
                             if (loaded) {
                                 if(armed && registry.identityStatus().readiness==CarPlayIdentification.Readiness.ARMED
@@ -230,8 +283,7 @@ final class IdentityInstaller {
                 catch (Throwable error) { mod.log("CarPlayStart: watcher stopped (" + error.getClass().getSimpleName() + ")"); }
                 finally {
                     synchronized (IdentityInstaller.class) {
-                        clearStart(mod);
-                        watcherStarted = false;
+                        try{suspend(mod,registry);}finally{watcherStarted = false;}
                     }
                 }
             }
