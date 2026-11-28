@@ -1,0 +1,20 @@
+# Coordinated RC11 / RC7 / RC4 readiness checkpoint
+
+Verified CI on the three source revisions on November 27, 2026:
+- WCP 65abb3d93fc75bf724be60c7c938b4ee8a668072: 46089931942 success; preceding metadata and pair validation runs 46089483853 and 46089726283 success.
+- STBT 3d3bbb243417e5f256b6ea780a3d307b828f8d1f: 46056889074 success.
+- CPUL rc11-consolidated-v2 3c7ff111331de0254566dc7e0c735746566c6c6a: corrected Stage 1 run 46089318024 success; separate earlier run 46089317040 failure. These are source checkpoints, not finalized release pins or evidence of vehicle behavior.
+
+## Release gate correction
+WCP signed release workflow previously called the source-floor workflow and only three session logging regressions; it omitted the branch CI's remaining identity recovery, log policy, OPACK/quarantine and native ownership regression jobs. Make branch CI callable and invoke the same full suite after the version gate and before signing. This avoids diverging release and development test definitions. Preserve existing signing, package identity, author UUID, tag checks, and publication trigger/flags. No release triggered by this feature-branch commit. New workflow still requires CI validation; reusable workflow call itself is not exercised by ordinary push CI.
+
+## Combined acceptance constraints
+Keep WCP integrated TBT off (settings.json default false, part gated by settings.tbt) with STBT. WCP bridge default true; K5 gasoline identity explicit opt-in, default false. STBT experimental Waze recovery and verbose diagnostics default false. Both manifests specify HMG-API >=1.1.0-rc.10. STBT still manifest 1.0.0-rc.3 and WCP 2.2.1-rc.6 until explicit candidate metadata preparation; no assumption that green source CI equals signed release. CPUL passive discovery is opt-in and restart-required; no Stage 2, no FileTransfer advertisement, no live archive transport. Verify actual updated CPUL recipe at final pins, cross-repo navigation ownership and full package compatibility, author signing and changelogs. Vehicle validation after coordinated candidate publication only with user approval. FileTransfer transport remains blocked on UUID / framing / encryption / INFO / SETUP evidence, not to be represented as working. User's priority is getting useful coordinated RC11 vehicle logs; do not hold that indefinitely for unapproved experimental Stage 2.
+
+## Approved next generation numbering
+After the current three candidates, CPUL, WCP and STBT transition to 3.0.0-rc.1. CPUL owns the release-train counter. WCP/STBT only release when warranted by their own changes, and use the current CPUL RC number when they do; unchanged packages retain their last version and skip intervening numbers. Each CPUL candidate records exact compatible companion revisions/versions, not equality of version numbers as a compatibility rule. Do not reset package IDs, author keys, settings or API versions. No version changes in this commit. Keep unrelated mods independently versioned unless explicitly directed otherwise.
+
+## Remaining release work
+1. Verify this workflow revision; perform final pinned CPUL/WCP/STBT source and native recipe audit.
+2. Prepare WCP rc.7 and STBT rc.4 version metadata and complete changelogs; verify installer/package version consistency and full CI.
+3. Provide CPUL exact final companion source revisions and readiness limitations. Obtain explicit release authorization. No publication or CPUL modification in this cycle.
