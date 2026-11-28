@@ -135,14 +135,21 @@ final class IdentityInstaller {
         try {
             byte[] name = vehicle == null ? new byte[0] : vehicle.displayName.getBytes("UTF-8");
             byte[] themeId = theme == null ? new byte[0] : theme.encoded().getBytes("US-ASCII");
+            byte[] initialStart=null;
+            if(theme!=null && snapshot.start && mod.settingBoolean("bridge",true)){
+                try{initialStart=StartSession.prepare(app.context,theme,mod).message;}
+                catch(Throwable error){notice(mod,"initial preparation unavailable; stock startup retained");}
+            }
             if(!registry.report(snapshot.generation,CarPlayIdentification.Readiness.PREPARED,"validated native inputs")) return;
             int rc = NativeIdentity.configure(name, vehicle == null ? -1 : vehicle.engineType,
-                    dcType, dcPower, acType, acPower, themeId, true); // RC6 verified full-tuple identity format
-            if (rc != 0) throw new NativeFailure(rc);
+                    dcType, dcPower, acType, acPower, themeId, true, initialStart); // RC6 verified full-tuple identity format
+            if (rc != 0 && rc != 1) throw new NativeFailure(rc);
             if(!registry.report(snapshot.generation,CarPlayIdentification.Readiness.ARMED,"native configure succeeded")) {
                 shutdownPending=true;finishShutdown(mod);return;
             }
             withdrawal.setPending(false); // successful native configure clears its payload
+            if(rc==0 && initialStart!=null){lastStart=initialStart;notice(mod,"armed atomically ("+initialStart.length+" bytes; contents not logged)");}
+            else if(rc==1)notice(mod,"initial native extension refused; stock startup retained");
             armed = true;
             resumeRecovery.stop();
             armedGeneration=snapshot.generation;

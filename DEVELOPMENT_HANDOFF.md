@@ -1,3 +1,11 @@
+# RC9 compilation correction
+
+CI 46171120755 and 46171230993 failed production native compilation on unused legacy configure wrapper retained for harness. Mark wrapper unused; no runtime behavior change. Rebuild original implementation and fixture commits with corrected ancestry. Fresh CI required.
+
+# RC9 atomic initial identity and StartSession publication
+
+Parent 108f92ff9bb0b597887b06ac9fec8db27838a576 fully passed CI 46168316125. Prepare initial payload before native configure, publish under same native mutex via lock-held StartSession helper. JNI private signature changes in lockstep; public API v3 unchanged. Native return 1 means identity installed but optional StartSession refused, preserving stock fallback and later refresh. Existing standalone withdrawal path retained. No vehicle causality established. Fresh CI and dedicated combined-path fixture required; check harness and any static JNI signature checks. No release or companion edits.
+
 # RC9 generation reconciliation
 
 Parent 115ccba0087ed604f384bb03ff06a03c9ad58f77 passed complete CI 46166097559. Registry mutation publishes generation before invoking listener outside registry lock. OEM pre-connect and feature-init previously tested only armed boolean, allowing stale generation to clear StartSession without applying current identity. Reconcile stale armed generation at both hooks and watcher; existing failed-configure retry policy unchanged. Synchronized predicate uses installer lock; no new registry-to-installer lock inversion. No API or wire changes. New behavior not yet vehicle validated; full CI pending, dedicated race fixture outstanding. Updated logs awaited but not blocking independent work.

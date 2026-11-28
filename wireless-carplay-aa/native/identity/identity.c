@@ -201,7 +201,7 @@ static int theme_tuple_ok(const char *s,u32 n){
     while(i<n){if(!theme_char(s[i],1))return 0;i++;}
     return i>begin && i-begin<=24;
 }
-static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len,int legacy){
+static int configure_with_start(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len,int legacy,const unsigned char *msg,u32 msg_len){
     if(!hook_mailbox){int rc=bind();if(rc){hook_mailbox=0;return rc;}}
     int vehicle=len!=0,themed=theme_len!=0;
     if(!vehicle && !themed)return -12;
@@ -240,20 +240,29 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     }
     __atomic_store_n(&configured,1,__ATOMIC_RELEASE);int result=set_handler((u32)identity_builder);
     if(result)__atomic_store_n(&configured,0,__ATOMIC_RELEASE);
+    else if(msg_len){int start_rc=start_configure_locked(msg,msg_len);if(start_rc)result=1;}
     unlock_mutex(&identity_mutex);return result;
+}
+
+static __attribute__((unused)) int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len,int legacy){
+    return configure_with_start(name,len,engine_type,dc_type,dc,ac_type,ac,theme_id,theme_len,legacy,0,0);
 }
 
 JNIEXPORT void JNICALL Java_hmgapi_mods_wireless_NativeIdentity_compatibilityMode(JNIEnv *env,jclass cls,jint mode){
     (void)env;(void)cls;
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE))rc7_mode=(unsigned int)mode&7U;
 }
-JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_configure(JNIEnv *env,jclass cls,jbyteArray name,jint engine_type,jint dc_type,jint dc,jint ac_type,jint ac,jbyteArray theme_id,jboolean legacy){
+JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_configure(JNIEnv *env,jclass cls,jbyteArray name,jint engine_type,jint dc_type,jint dc,jint ac_type,jint ac,jbyteArray theme_id,jboolean legacy,jbyteArray message){
     (void)cls;if(!name || !theme_id)return -12;jsize n=(*env)->GetArrayLength(env,name),t=(*env)->GetArrayLength(env,theme_id);
     if(n>320 || t>96)return -12;char bytes[321],theme_bytes[97];
     if(n)(*env)->GetByteArrayRegion(env,name,0,n,(jbyte*)bytes);
     if(t)(*env)->GetByteArrayRegion(env,theme_id,0,t,(jbyte*)theme_bytes);
     if((*env)->ExceptionCheck(env))return -12;
-    return configure(bytes,(u32)n,engine_type,dc_type,(u32)dc,ac_type,(u32)ac,theme_bytes,(u32)t,legacy);
+    unsigned char payload[START_MAX];jsize m=message?(*env)->GetArrayLength(env,message):0;
+    if(m<0 || m>START_MAX)return -12;
+    if(m)(*env)->GetByteArrayRegion(env,message,0,m,(jbyte*)payload);
+    if((*env)->ExceptionCheck(env))return -12;
+    return configure_with_start(bytes,(u32)n,engine_type,dc_type,(u32)dc,ac_type,(u32)ac,theme_bytes,(u32)t,legacy,payload,(u32)m);
 }
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_shutdown(JNIEnv *env,jclass cls){
     (void)env;(void)cls;__atomic_store_n(&configured,0,__ATOMIC_RELEASE);

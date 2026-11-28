@@ -147,42 +147,47 @@ static int start_params_ok(const unsigned char *p,u32 n,int top){
     }
     return 1;
 }
-static int start_configure(const unsigned char *msg,u32 len){
-    if(!lock_mutex || !unlock_mutex)return len?-18:0;
-    if(lock_mutex(&identity_mutex))return -15;
+static int start_configure_locked(const unsigned char *msg,u32 len){
     // A rejected replacement must not leave a previous session payload armed.
     start_clear_locked();
     if(len>START_MAX || (len && (!msg || len<6 || msg[0]!=0x40 || msg[1]!=0x40
        || ((u32)msg[2]<<8|msg[3])!=len || msg[4]!=0x43 || msg[5]!=0x01
        || !start_params_ok(msg+6,len-6,1)))){
-        unlock_mutex(&identity_mutex);return -12;
+        return -12;
     }
-    if(!len){unlock_mutex(&identity_mutex);return 0;}
+    if(!len){return 0;}
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE) || !has_theme || !handlers
        || !packet_create || !packet_destroy || !session_malloc || !send_packet || !root_table){
-        unlock_mutex(&identity_mutex);return -18;
+        return -18;
     }
     int sent=0,received=0;
     for(u32 i=0;i<24;i++){
         if(root_table[i].id==6 && root_table[i].length)sent++;
         if(root_table[i].id==7 && root_table[i].length)received++;
     }
-    if(sent!=1 || received!=1){unlock_mutex(&identity_mutex);return -20;}
+    if(sent!=1 || received!=1){return -20;}
     StartHandler *h=&handlers[33];
     /* Same verified stock duplicate 0x5202 slot as the bundled original.
        Never overwrite an unknown handler or a foreign extension. */
     if(handlers[32].id!=0x5202 || (h->id!=0x5202 && (h->id!=AVAILABILITY || h->notify!=(u32)start_notify))){
-        unlock_mutex(&identity_mutex);return -20;
+        return -20;
     }
     if(h->id!=AVAILABILITY){
         void *page=(void*)((u32)h&~4095U);
         u32 span=((u32)(h+1)-(u32)page+4095U)&~4095U;
-        if(protect_page(page,span,3)){unlock_mutex(&identity_mutex);return -19;}
+        if(protect_page(page,span,3)){return -19;}
         h->notify=(u32)start_notify;h->reply=0;h->arg=0;
         __atomic_store_n(&h->id,AVAILABILITY,__ATOMIC_RELEASE);
     }
     for(u32 i=0;i<len;i++)start_msg[i]=msg[i];
     start_len=len;
-    unlock_mutex(&identity_mutex);
+    
     return 0;
+}
+
+static int start_configure(const unsigned char *msg,u32 len){
+    if(!lock_mutex || !unlock_mutex)return len?-18:0;
+    if(lock_mutex(&identity_mutex))return -15;
+    int rc=start_configure_locked(msg,len);
+    unlock_mutex(&identity_mutex);return rc;
 }

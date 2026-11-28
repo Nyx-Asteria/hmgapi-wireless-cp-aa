@@ -8,7 +8,7 @@ final class NativeIdentity {
     static void load() { System.load("/system/lib/libcarplayidentity.so"); }
     static native void compatibilityMode(int mode);
     static native int configure(byte[] displayName, int engineType, int dcConnector,
-            int dcPowerW, int acConnector, int acPowerW, byte[] themeIdentity, boolean legacyTheme);
+            int dcPowerW, int acConnector, int acPowerW, byte[] themeIdentity, boolean legacyTheme, byte[] initialStart);
     static native int shutdown();
     static native boolean identityBuilt();
     // Most recent successful builder: engine=1, theme=2, name=4.
