@@ -30,15 +30,31 @@ public final class ThemeOpackTest {
         ThemeTransferSession session=new ThemeTransferSession(dir,3);
         try{
             String header="e5 4b6d65737361676554797065 09 4b7061796c6f616454797065 09 4973657373696f6e4944 4173 4776657273696f6e 31d903 4a6368756e6b436f756e74 09";
-            check(session.receive(ThemeOpack.decode(hex(header)))==null);
+            check(session.receiveEncoded(hex(header))==null);
             String chunk="e5 4b6d65737361676554797065 0a 4973657373696f6e4944 4173 4a6368756e6b496e646578 08 4464617461 73616263 48636865636b73756d 6140";
             byte[] prefix=hex(chunk),sum="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad".getBytes("US-ASCII");
             byte[] frame=java.util.Arrays.copyOf(prefix,prefix.length+sum.length);
             System.arraycopy(sum,0,frame,prefix.length,sum.length);
-            ThemeTransferSession.Captured c=session.receive(ThemeOpack.decode(frame));
+            ThemeTransferSession.Captured c=session.receiveEncoded(frame);
             check(c.header.version==985 && java.util.Arrays.equals(Files.readAllBytes(c.archive.toPath()),new byte[]{97,98,99}));
             check(c.archive.delete());
         }finally{session.close();for(File f:dir.listFiles())f.delete();dir.delete();}
+        // Decoder failures must close the session and remove staged bytes, not
+        // leave a live capture waiting for a future message.
+        File interrupted=Files.createTempDirectory("theme-opack-abort").toFile();
+        ThemeTransferSession abort=new ThemeTransferSession(interrupted,3);
+        try {
+            String two="e5 4b6d65737361676554797065 09 4b7061796c6f616454797065 09 4973657373696f6e4944 4173 4776657273696f6e 31d903 4a6368756e6b436f756e74 0a";
+            String first="e4 4b6d65737361676554797065 0a 4973657373696f6e4944 4173 4a6368756e6b496e646578 08 4464617461 7161";
+            check(abort.receiveEncoded(hex(two))==null);
+            check(abort.receiveEncoded(hex(first))==null);
+            check(interrupted.list().length==1);
+            try {abort.receiveEncoded(hex("e1 41ff 09"));throw new AssertionError("accepted malformed OPACK");}
+            catch(IOException expected){}
+            check(interrupted.list().length==0);
+            try {abort.receiveEncoded(hex(two));throw new AssertionError("reopened aborted capture");}
+            catch(IOException expected){}
+        }finally{abort.close();for(File f:interrupted.listFiles())f.delete();interrupted.delete();}
         System.out.println("PASS synthetic OPACK dictionary quarantine and malformed inputs");
     }
 }

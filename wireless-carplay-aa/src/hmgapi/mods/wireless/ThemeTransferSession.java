@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * Decoded CarPlayUpdateData dictionary adapter; one archive per instance.
- * No OPACK decoder, transport, acknowledgement, installation or runtime caller.
+ * Bounded OPACK adapter; no transport, acknowledgement, installation or runtime caller.
  * Limits are local policy, not inferred Apple wire limits. Metadata stays
  * untrusted; the digest only establishes consistency with the sender's checksum.
  */
@@ -37,10 +37,28 @@ final class ThemeTransferSession implements Closeable {
     static final class Captured {
         final Header header;
         final File archive;
-        Captured(Header header,File archive){this.header=header;this.archive=archive;}
+        final long size;
+        final String checksum;
+        Captured(Header header,File archive,long size,String checksum){
+            this.header=header;this.archive=archive;this.size=size;this.checksum=checksum;
+        }
     }
     ThemeTransferSession(File directory,long byteLimit){
         this.directory=directory;this.byteLimit=byteLimit;
+    }
+
+    /** Accept a single complete, already authenticated application body.
+     * This method does not authenticate or frame the transport itself.
+     * Malformed OPACK is fatal to this capture, just like a malformed dictionary.
+     */
+    synchronized Captured receiveEncoded(byte[] body) throws IOException {
+        if(closed)throw new IOException("transfer closed");
+        try {
+            return receive(ThemeOpack.decode(body));
+        } catch(IOException failure) {
+            try{close();}catch(IOException cleanup){failure.addSuppressed(cleanup);}
+            throw failure;
+        }
     }
 
     /** Null means incomplete; only completed capture is returned, never an ACK. */
@@ -55,7 +73,7 @@ final class ThemeTransferSession implements Closeable {
                 Header h=new Header(session(message),integer(message,"version",0,0xffffffffL),
                     (int)integer(message,"chunkCount",1,ThemeArchiveCapture.MAX_CHUNKS),
                     metadata(message,"certificate"),metadata(message,"signature"),metadata(message,"additions"));
-                capture=new ThemeArchiveCapture(directory,h.chunkCount,byteLimit);
+                capture=ThemeQuarantineBudget.admit(directory,h.chunkCount,byteLimit);
                 header=h;
                 return null;
             }
@@ -67,7 +85,7 @@ final class ThemeTransferSession implements Closeable {
             if(message.containsKey("checksum") && !(checksum instanceof String))throw new IOException("invalid checksum type");
             File result=capture.append(index,((byte[])raw).clone(),(String)checksum);
             if(result==null)return null;
-            Captured complete=new Captured(header,result);
+            Captured complete=new Captured(header,result,result.length(),(String)checksum);
             close();
             return complete;
         }catch(IOException failure){
