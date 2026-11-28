@@ -56,9 +56,13 @@ int test_main(void){
     lock_mutex=mutex;unlock_mutex=mutex;protect_page=protect;hook_mailbox=&mailbox;
     result=configure("Kia EV6",7,2,0,235000,2,10900,"",0,0);slot=0;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(!identity_built)result|=1;
     result|=configure("Kia EV6",7,2,0,235000,2,10900,"THEME1:985:19.0",15,0);slot=1;
+    if(identity_built)result|=1;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(!identity_built)result|=1;
     result|=configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,0);slot=2;
+    if(identity_built)result|=1;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     result|=configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=3;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);

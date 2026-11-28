@@ -9,7 +9,22 @@ package hmgapi.mods.wireless.api;
  */
 public interface CarPlayIdentification {
     String SERVICE = "carplay-identification";
-    int API_VERSION = 2;
+    int API_VERSION = 3;
+
+    /** Process-local state; registration alone never implies native activation. */
+    enum Readiness { UNAVAILABLE, REGISTERED, PREPARED, ARMED, ADVERTISED, FAILED }
+
+    final class IdentityStatus {
+        public final long generation;
+        public final Readiness readiness;
+        public final String reason;
+        public IdentityStatus(long generation, Readiness readiness, String reason) {
+            this.generation=generation; this.readiness=readiness; this.reason=reason;
+        }
+    }
+
+    /** Snapshot for the current contribution generation in this process. */
+    IdentityStatus identityStatus();
 
     /** Register or replace one mod's vehicle identity contribution. */
     void registerVehicle(String modId, VehicleIdentity vehicle);
