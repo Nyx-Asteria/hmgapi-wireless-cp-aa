@@ -29,6 +29,18 @@ public final class IdentityRegistryHarness {
         check(log.toString().contains("fixture.theme: register theme identity"), "theme request logged");
         check(log.toString().contains("fixture.conflict: register theme identity"), "rejected request logged");
         check(log.toString().contains("fixture.theme: remove theme identity"), "removal request logged");
+        registry.removeVehicle("fixture.ev");
+        registry.registerVehicle("fixture.k5",new CarPlayIdentification.VehicleIdentity("Kia K5",
+                CarPlayIdentification.VehicleIdentity.ENGINE_GASOLINE,new CarPlayIdentification.Connector[0]));
+        check(registry.vehicle().connectors.length==0,"gasoline profile contains no charging connectors");
+        try {
+            new CarPlayIdentification.VehicleIdentity("Invalid gasoline",CarPlayIdentification.VehicleIdentity.ENGINE_GASOLINE,connectors);
+            throw new AssertionError("gasoline connectors accepted");
+        } catch(IllegalArgumentException expected){}
+        try {
+            new CarPlayIdentification.VehicleIdentity("Invalid EV",CarPlayIdentification.VehicleIdentity.ENGINE_ELECTRIC,new CarPlayIdentification.Connector[0]);
+            throw new AssertionError("empty EV connectors accepted");
+        } catch(IllegalArgumentException expected){}
         System.out.println("PASS mock mods compose independent vehicle and theme contributions");
     }
 
