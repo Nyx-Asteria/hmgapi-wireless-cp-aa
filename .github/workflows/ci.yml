@@ -53,6 +53,14 @@ jobs:
           javac --release 8 -d out/log-writer wireless-carplay-aa/src/hmgapi/mods/wireless/dipo/SessionLogWriter.java wireless-carplay-aa/src/hmgapi/mods/wireless/dipo/SessionLogPolicy.java wireless-carplay-aa/tests/SessionLogWriterTest.java
           java -cp out/log-writer hmgapi.mods.wireless.dipo.SessionLogWriterTest
 
+      - name: RC8 pre-projection startup recording and verified export
+        run: python3 wireless-carplay-aa/tests/startup_recording_test.py
+
+      - name: RC8 ARM identity library compilation
+        run: |
+          mkdir -p out/rc8-native
+          sh wireless-carplay-aa/native/identity/build.sh "$PWD/out/rc8-native/libcarplayidentity.so"
+
       - name: Java session export regression
         run: |
           mkdir -p out/session-export

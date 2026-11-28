@@ -574,5 +574,6 @@ public final class SessionExporter {
         if(!pending.renameTo(marker))throw new IOException("cannot publish local marker");
         flushDirectory(source,NO_GUARD);
         if(!verifiedBundleMarker(source))throw new IOException("local marker verification failed");
+        System.out.println("Verified bundle export: "+target.getName()+" folder="+root.getName());
     }
 }

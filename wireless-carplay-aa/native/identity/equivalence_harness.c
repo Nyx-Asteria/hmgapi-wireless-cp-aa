@@ -197,6 +197,19 @@ int test_main(void){
     if(children!=stock_wireless || early(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
     build_lookup=0;stock_wireless_lookup=0;
     stock_wireless_count=2;
+    /* RC8 default path: fixed callback and legacy append, even with an
+       OEM root callback that would have returned different metadata. */
+    rc7_mode=0;build_lookup=alternate_root;identity_seen=0;more=99;
+    Lookup legacy=(Lookup)identity_value(24,13,&child_count,0,&more);
+    if(legacy!=wireless_value || more!=0)result|=1;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(child_count!=4 || children[2].id!=5 || children[3].id!=6
+       || legacy(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))result|=1;
+    if(legacy(1,10,&child_count,0,&more)!=wireless_name || more!=0)result|=1;
+    stock_wireless_count=4;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(child_count!=6 || children[4].id!=5 || children[5].id!=6)result|=1;
+    stock_wireless_count=2;build_lookup=0;rc7_mode=7;
     // Native tuple parser mirrors the Java API, including uint32 bounds.
     if(!theme_tuple_ok("THEME1:985:19.0",15)
        || !theme_tuple_ok("A:4294967295:1",13)
@@ -234,6 +247,13 @@ int test_main(void){
     if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=0)result|=1;
     if(start_append(fixture_blob,0,0,0,0,0,0)!=4
        || start_append(fixture_blob,capabilities,8,0,0,0,0)!=4)result|=1;
+    /* RC8 default: RC6 sizing/append semantics with bounds and evidence. */
+    rc7_mode=0;start_len=6;start_capability_seen=0;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=6 || start_capability_seen)result|=1;
+    if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=6
+       || capabilities[4]!=0x43 || capabilities[5]!=1 || start_capability_seen!=1)result|=1;
+    if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)result|=1;
+    start_clear_locked();rc7_mode=7;
     /* Framing of top-level and nested codec parameters. */
     static const unsigned char framed[]={0,9,0,1,0,5,0,0,'S',0,4,0,99};
     static const unsigned char short_header[]={0,4,0};

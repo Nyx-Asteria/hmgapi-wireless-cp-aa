@@ -17,11 +17,20 @@ public final class StartupRecording {
         worker.setDaemon(true);
         worker.start();
     }
-    public synchronized void record(String message){
-        if(!active){recorder.start("WCP 2.2.1-rc.8 pre-projection diagnostic segment");active=true;}
-        recorder.record(message);
+    public synchronized void record(String message){ append(message,false); }
+    public synchronized void error(String message){ append(message,true); }
+    private void append(String message,boolean error){
+        try{
+            if(!active){recorder.start("WCP 2.2.1-rc.8 pre-projection diagnostic segment");active=true;}
+            if(error)recorder.error(message);else recorder.record(message);
+        }catch(RuntimeException|LinkageError failure){
+            android.util.Log.e("HMG-API","RC8 startup recording failed: "+failure.getClass().getSimpleName());
+        }
     }
     public synchronized void rotate(){
-        if(active){recorder.end("periodic startup checkpoint");active=false;}
+        try{if(active)recorder.end("periodic startup checkpoint");}
+        catch(RuntimeException|LinkageError failure){
+            android.util.Log.e("HMG-API","RC8 startup checkpoint failed: "+failure.getClass().getSimpleName());
+        }finally{active=false;}
     }
 }

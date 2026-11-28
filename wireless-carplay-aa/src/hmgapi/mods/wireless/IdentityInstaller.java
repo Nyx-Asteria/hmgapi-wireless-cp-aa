@@ -10,7 +10,7 @@ import hmgapi.mods.wireless.api.CarPlayIdentification;
 final class IdentityInstaller {
     private IdentityInstaller() {}
     private static boolean loaded;
-    private static hmgapi.mods.wireless.dipo.StartupRecording startup;
+    private static volatile hmgapi.mods.wireless.dipo.StartupRecording startup;
     private static void log(ModContext mod,String message){ mod.log(message); if(startup!=null) startup.record(message); }
     private static boolean groupsWanted(ModContext mod, IdentityRegistry registry){ return mod.enabled() && (mod.settingBoolean("rc7_force_vehicle_groups",false) || registry.vehicle()!=null); }
     private static volatile boolean armed;
@@ -74,6 +74,7 @@ final class IdentityInstaller {
         mod.hook(app.classLoader, "iap2.service.receive_connect", new MethodHook() {
             @Override protected void beforeHookedMethod(Param p) {
                 if (p.args.length != 1 || !(p.args[0] instanceof Integer) || ((Integer)p.args[0]) != 4) return;
+                log(mod,"MILESTONE iAP2 component 4 pre-connect enter");
                 try {
                     if (!armed) apply(mod, app, contributions);
                     refreshStart(mod, app, contributions);
@@ -82,6 +83,10 @@ final class IdentityInstaller {
                 // A missing group hook must not prevent session preparation.
                 try { if(groupsWanted(mod,contributions))enableGroups(app.classLoader); }
                 catch (Throwable t) { failure(mod, "CarPlay stock vehicle groups before connect", t); }
+            }
+            @Override protected void afterHookedMethod(Param p){
+                if(p.args.length!=1 || !Integer.valueOf(4).equals(p.args[0]))return;
+                log(mod,"MILESTONE iAP2 component 4 pre-connect "+(p.hasThrowable()?"threw":"returned"));
             }
         });
         watchStart(mod, app, registry);
@@ -330,7 +335,7 @@ final class IdentityInstaller {
     }
 
     private static void failure(ModContext mod, String message, Throwable t) {
-        if(startup!=null)startup.record(message+" error="+t.getClass().getSimpleName());
+        if(startup!=null)startup.error(message+" error="+t.getClass().getSimpleName());
         if (t instanceof NativeFailure && ((NativeFailure) t).code == -21)
             log(mod,message + ": native gate not ready; will retry before identification");
         else mod.error(message, t);

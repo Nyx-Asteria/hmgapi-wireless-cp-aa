@@ -81,7 +81,7 @@ public final class Dipo {
     static final ThreadLocal<String> SESSION = new ThreadLocal<String>();
     static final ThreadLocal<Boolean> NO_ADDRESS = new ThreadLocal<Boolean>();
 
-    private static StartupRecording startup;
+    private static volatile StartupRecording startup;
     private static volatile boolean projectionStarted;
     static void log(String m) {
         mod.log(m);
@@ -94,7 +94,7 @@ public final class Dipo {
         mod.error(m, t);
         if (recording != null) recording.error(m + " error=" + t.getClass().getSimpleName());
         else if(journal!=null)journal.record(m+" error="+t.getClass().getSimpleName());
-        if(startup!=null)startup.record(m+" error="+t.getClass().getSimpleName());
+        if(startup!=null)startup.error(m+" error="+t.getClass().getSimpleName());
     }
 
     /** Wireless.appLoaded, in DiPO's process */
