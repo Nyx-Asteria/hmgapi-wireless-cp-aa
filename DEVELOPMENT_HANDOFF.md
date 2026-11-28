@@ -1,3 +1,7 @@
+# RC8 freestanding diagnostic correction
+
+Parent 0781e4369e459e300ab636f396a71fc13151e873: CI 46107478550 and release 46107478544 failed only at ARM harness link: the new diagnostic's integer division generated unresolved __aeabi_uidiv. Production packaging and Java tests passed, release skipped. Replace runtime decimal conversion with compile-time __LINE__ stringification; all original checks remain intact and no production changes. Local tool availability checked: clang and ld.lld exist, QEMU unavailable, GitHub DNS/network inaccessible. Fresh CI required to establish whether tuple length repair resolved all assertions. No verified permanent signed RC8 artifact yet.
+
 # RC8 native fixture length correction
 
 Source audit found a concrete harness defect: the valid uint32-max tuple "A:4294967295:1" is 14 bytes, but the fixture supplied 13, truncating the SDK field and necessarily failing the valid-case assertion. The overflow fixture also supplied 13 rather than 14. Use sizeof(literal)-1 for every tuple assertion to test the intended bytes, and correct diagnostic line-number positions. No production changes or assertion relaxation. Other failures, if any, remain visible through the new per-assertion diagnostics. Fresh CI and signing still required.

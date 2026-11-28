@@ -19,13 +19,11 @@ char output[6][1024];
 int result;
 static u32 at,value=42,mailbox,slot;
 static void semihost(u32 operation,const void *argument);
-static void fixture_failure(unsigned line){
-    char msg[]="FAIL assertion at harness line 00000\n";
-    for(int i=35;i>=31;i--){msg[i]=(char)('0'+line%10);line/=10;}
-    semihost(4,msg);
-    result|=1;
-}
-#define FAIL_CHECK() fixture_failure(__LINE__)
+/* Compile-time stringification: no division or formatting runtime needed
+ * in the freestanding ARM image. */
+#define STR_INNER(x) #x
+#define STR(x) STR_INNER(x)
+#define FAIL_CHECK() do { semihost(4,"FAIL assertion at harness line " STR(__LINE__) "\n"); result|=1; } while(0)
 
 static Param root[24],stock_info[5],stock_status[13],stock_wireless[WIRELESS_MAX+1];
 static u16 stock_wireless_count=2;
