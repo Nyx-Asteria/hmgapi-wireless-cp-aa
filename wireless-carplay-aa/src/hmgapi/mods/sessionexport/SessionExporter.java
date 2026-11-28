@@ -72,6 +72,12 @@ public final class SessionExporter {
                                     new File(files, "wcp-carplay-sessions"), dest, guard); }
                             catch (Exception e) { if (first == null) first = e; }
                         }
+                        try { exportBundles(new File(files, args[0] + "-session-bundles"), dest, guard); }
+                        catch (Exception e) { if (first == null) first = e; }
+                        if (!wcp) {
+                            try { exportBundles(new File(files, "stbt-third-party-bundles"), child(dest, "third-party-navigation"), guard); }
+                            catch (Exception e) { if (first == null) first = e; }
+                        }
                         if (first != null) throw first;
                     } catch (Exception e) { error = e.toString(); }
                 }
@@ -393,5 +399,135 @@ public final class SessionExporter {
     }
     static byte[] digest(byte[] bytes){
         Sha256 md=new Sha256();md.update(bytes,0,bytes.length);return md.digest();
+    }
+
+    // CPUL-style immutable directory publication. Keep the root service as the
+    // only USB publisher; the DiPO writer owns only its internal spool.
+    private static boolean sessionFolder(String name) {
+        return name.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_session-[0-9]+_[0-9a-f-]{36}");
+    }
+    static void exportBundles(File spool, File root, Guard guard) throws Exception {
+        File[] sessions=spool.listFiles();
+        if(sessions==null)return;
+        Arrays.sort(sessions);
+        Exception first=null;
+        for(File source:sessions){
+            if(!sessionFolder(source.getName())||!source.isDirectory())continue;
+            try {
+                child(spool,source.getName());
+                if(child(source,".exported").isFile())continue;
+                exportBundle(source,root,guard);
+            } catch(Exception e){if(first==null)first=e;}
+        }
+        if(first!=null)throw first;
+    }
+    private static boolean bundlePayload(String name,boolean diagnostic){
+        return diagnostic ? name.matches("[a-z_]+\\.log") :
+            name.equals("summary.txt")||name.equals("session.log")||name.equals("errors.log");
+    }
+    private static String bundleManifest(File root,Guard guard)throws Exception{
+        if(!child(root,"summary.txt").isFile()||!child(root,"session.log").isFile()||!child(root,"errors.log").isFile())
+            throw new IOException("incomplete session directory");
+        StringBuilder out=new StringBuilder();
+        long[] bytes={0};
+        bundleEntries(root,false,guard,out,bytes);
+        return out.toString();
+    }
+    private static void bundleEntries(File root,boolean diagnostic,Guard guard,StringBuilder out,long[] bytes)throws Exception{
+        guard.check();
+        File[] files=root.listFiles();
+        if(files==null)throw new IOException("cannot list session");
+        Arrays.sort(files);
+        for(File f:files){
+            String name=f.getName();
+            if(!diagnostic&&name.equals("diagnostics")){
+                File safe=child(root,name);
+                if(!safe.isDirectory())throw new IOException("invalid diagnostics directory");
+                bundleEntries(safe,true,guard,out,bytes);
+            }else if(bundlePayload(name,diagnostic)){
+                File safe=child(root,name);
+                if(!safe.isFile())throw new IOException("invalid session payload");
+                long length=safe.length();
+                if(length<0||length>8L*1024*1024||bytes[0]+length>8L*1024*1024)throw new IOException("session size limit");
+                Sha256 md=new Sha256();
+                long count=0;
+                try(InputStream in=new FileInputStream(safe)){
+                    byte[] buffer=new byte[32768];int n;
+                    while((n=in.read(buffer))!=-1){guard.check();count+=n;if(count>length)throw new IOException("session grew");md.update(buffer,0,n);}
+                }
+                if(count!=length||safe.length()!=length)throw new IOException("session changed");
+                bytes[0]+=count;
+                out.append(diagnostic?"diagnostics/":"").append(name).append(' ').append(count).append(' ');
+                for(byte b:md.digest()){int v=b&255;out.append(Character.forDigit(v>>>4,16)).append(Character.forDigit(v&15,16));}
+                out.append('\n');
+            }
+        }
+    }
+    private static void copyBundle(File source,File dest,boolean diagnostic,Guard guard)throws IOException{
+        guard.check();
+        directory(dest);
+        File[] files=source.listFiles();
+        if(files==null)throw new IOException("cannot list source");
+        for(File f:files){
+            String name=f.getName();
+            if(!diagnostic&&name.equals("diagnostics")){
+                copyBundle(child(source,name),child(dest,name),true,guard);
+            }else if(bundlePayload(name,diagnostic)){
+                File input=child(source,name), output=child(dest,name);
+                guard.check();
+                if(output.exists())throw new IOException("partial payload conflict");
+                try(InputStream in=new FileInputStream(input);FileOutputStream out=new FileOutputStream(output)){
+                    byte[] buffer=new byte[32768];int n;long count=0;
+                    while((n=in.read(buffer))!=-1){guard.check();count+=n;if(count>8L*1024*1024)throw new IOException("payload size limit");out.write(buffer,0,n);}
+                    out.getFD().sync();
+                }
+            }
+        }
+        flushDirectory(dest,guard);
+    }
+    private static void clearBundlePartial(File root,boolean diagnostic,Guard guard)throws IOException{
+        guard.check();
+        File[] files=root.listFiles();
+        if(files==null)throw new IOException("invalid partial directory");
+        for(File f:files){
+            File safe=child(root,f.getName());
+            if(!diagnostic&&f.getName().equals("diagnostics")&&safe.isDirectory())clearBundlePartial(safe,true,guard);
+            else if((bundlePayload(f.getName(),diagnostic)||(!diagnostic&&f.getName().equals("COMPLETE.txt")))&&safe.isFile()){
+                guard.check();if(!safe.delete())throw new IOException("cannot remove partial file");
+            }else throw new IOException("unknown partial entry; retained");
+        }
+        guard.check();if(!root.delete())throw new IOException("cannot remove partial directory");
+    }
+    private static String bundleMarker(File file)throws IOException{
+        if(!file.isFile()||file.length()>65536)throw new IOException("invalid completion marker");
+        ByteArrayOutputStream out=new ByteArrayOutputStream();
+        try(InputStream in=new FileInputStream(file)){
+            byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(out.size()+n>65536)throw new IOException("marker too large");out.write(b,0,n);}
+        }
+        return out.toString("UTF-8");
+    }
+    static void exportBundle(File source,File root,Guard guard)throws Exception{
+        if(!sessionFolder(source.getName()))throw new IOException("invalid session name");
+        String manifest=bundleManifest(source,guard);
+        guard.check();directory(root);
+        File target=child(root,source.getName()),partial=child(root,source.getName()+".partial");
+        if(!target.exists()){
+            if(partial.exists())clearBundlePartial(partial,false,guard);
+            if(root.getUsableSpace()<9L*1024*1024)throw new IOException("USB space low");
+            copyBundle(source,partial,false,guard);
+            if(!manifest.equals(bundleManifest(partial,guard))||!manifest.equals(bundleManifest(source,guard)))throw new IOException("bundle copy verification failed");
+            guard.check();
+            try(FileOutputStream out=new FileOutputStream(child(partial,"COMPLETE.txt"))){out.write(manifest.getBytes("UTF-8"));out.getFD().sync();}
+            flushDirectory(partial,guard);
+            guard.check();
+            if(target.exists()||!partial.renameTo(target))throw new IOException("bundle publication failed");
+            flushDirectory(root,guard);
+        }
+        guard.check();
+        if(!manifest.equals(bundleMarker(child(target,"COMPLETE.txt")))||!manifest.equals(bundleManifest(target,guard)))throw new IOException("bundle destination conflict");
+        guard.check();
+        // Mark only after verified publication. A failed local marker can be retried.
+        File marker=child(source,".exported");
+        try(FileOutputStream out=new FileOutputStream(marker)){out.write("verified\n".getBytes("UTF-8"));out.getFD().sync();}
     }
 }
