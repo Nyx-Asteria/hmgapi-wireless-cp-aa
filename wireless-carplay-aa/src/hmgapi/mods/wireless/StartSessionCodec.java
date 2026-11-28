@@ -16,7 +16,7 @@ final class StartSessionCodec {
         if(channel>=0)param(wifi,2,new byte[]{(byte)channel});
         ByteArrayOutputStream list=new ByteArrayOutputStream();
         for(String ip:ips){byte[] b=str(ip);list.write(b,0,b.length);}
-        param(wifi,3,list.toByteArray());
+        if(list.size()!=0)param(wifi,3,list.toByteArray());
         if(security>=0)param(wifi,4,new byte[]{(byte)security});
         ByteArrayOutputStream p=new ByteArrayOutputStream();
         param(p,1,wifi.toByteArray());

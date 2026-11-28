@@ -49,8 +49,8 @@ static void connector_dc(u16 a,u16 b,u32 c,void *d){(void)a;(void)b;(void)c;(voi
 static void connector_ac(u16 a,u16 b,u32 c,void *d){(void)a;(void)b;(void)c;(void)d;connector=ac_connector;}
 static void *info_value(u16 id,u16 type,u16 *n,void *key,int *more){
     if(more)*more=0;
-    if(id==2)return &engine;
-    if(id==6 || id==8)return display_name;
+    if(id==2){identity_seen|=1;return &engine;}
+    if(id==6 || id==8){identity_seen|=4;return display_name;}
     if(id==11)return &connector;
     if(id==12)return &dc_w;
     if(id==14)return &ac_w;
@@ -68,7 +68,7 @@ static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
 
 static Param parameter(u16 id,u16 type);
 static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *more){
-    if(id==20 && has_vehicle){if(more)*more=0;identity_seen|=1;*count=has_ev?9:5;return info_copy;}
+    if(id==20 && has_vehicle){if(more)*more=0;*count=has_ev?9:5;return info_copy;}
     if(id==21 && has_ev){if(more)*more=0;*count=15;return status_copy;}
     if(id==WIRELESS_GROUP && stock_children){
         theme_children_active=0;
@@ -119,7 +119,8 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
         }
     }
     u32 result=raw_builder(handle,session,a,b,command,root,24,name,identity_value);
-    u32 required=(has_vehicle?1:0)|(has_theme?2:0);
+    /* A selected child table alone is not evidence of serialized identity. */
+    u32 required=(has_vehicle?5:0)|(has_theme?2:0);
     if(result && required && (identity_seen&required)==required)
         __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
     build_lookup=0;stock_wireless_lookup=0;

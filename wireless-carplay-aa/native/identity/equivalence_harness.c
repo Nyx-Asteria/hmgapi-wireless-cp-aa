@@ -113,6 +113,12 @@ int test_main(void){
     result|=configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=5;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     if(configure("Kia K5",6,0,0,235000,2,10900,"",0,0)!=-12)result|=1;
+    // Vehicle readiness requires actual engine and name lookup, not table selection.
+    identity_seen=0;
+    u16 vehicle_count=0;int vehicle_more=0;
+    if(identity_children(20,13,&vehicle_count,0,&vehicle_more)!=info_copy || identity_seen)result|=1;
+    if(info_value(2,8,&vehicle_count,0,&vehicle_more)!=&engine || identity_seen!=1)result|=1;
+    if(info_value(6,10,&vehicle_count,0,&vehicle_more)!=display_name || identity_seen!=5)result|=1;
     // Exercise OEM tables that already contain theme IDs; preserve other
     // entries, replace only those owned by the selected format.
     stock_wireless[2]=parameter(5,12);stock_wireless[3]=parameter(6,10);
@@ -160,6 +166,23 @@ int test_main(void){
        || theme_tuple_ok("A:1:",4)
        || theme_tuple_ok("A.B:1:1",7)
        || theme_tuple_ok("A:1:1:2",7))result|=1;
+    /* Framing of top-level and nested codec parameters. */
+    static const unsigned char framed[]={0,9,0,1,0,5,0,0,'S',0,4,0,99};
+    static const unsigned char short_header[]={0,4,0};
+    static const unsigned char zero_size[]={0,0,0,1};
+    static const unsigned char overrun[]={0,5,0,2};
+    static const unsigned char nested_overrun[]={0,8,0,7,0,5,0,0};
+    static const unsigned char nested_tail[]={0,5,0,1,0};
+    if(!start_params_ok(framed,sizeof(framed),1)
+       || !start_params_ok(0,0,1)
+       || start_params_ok(short_header,sizeof(short_header),1)
+       || start_params_ok(zero_size,sizeof(zero_size),1)
+       || start_params_ok(overrun,sizeof(overrun),1)
+       || start_params_ok(nested_overrun,sizeof(nested_overrun),1)
+       || start_params_ok(nested_tail,sizeof(nested_tail),1))result|=1;
+    static const unsigned char bad_frame[]={0x40,0x40,0,10,0x43,1,0,5,0,2};
+    start_len=6;start_msg[0]=0x55;
+    if(start_configure(bad_frame,sizeof(bad_frame))!=-12 || start_len || start_msg[0])result|=1;
     /* Rejecting malformed replacements must erase the old native payload. */
     static const unsigned char invalid[]={0x40,0x40,0,6,0x43,0};
     start_len=6;for(u32 i=0;i<6;i++)start_msg[i]=0x55;
