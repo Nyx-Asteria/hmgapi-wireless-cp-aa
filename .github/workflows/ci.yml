@@ -69,3 +69,24 @@ jobs:
           mkdir -p out/resume-recovery
           javac --release 8 -d out/resume-recovery wireless-carplay-aa/src/hmgapi/mods/wireless/ResumeRecovery.java wireless-carplay-aa/tests/ResumeRecoveryTest.java
           java -cp out/resume-recovery hmgapi.mods.wireless.ResumeRecoveryTest
+
+      - name: Experimental theme archive quarantine regression
+        run: |
+          mkdir -p out/theme-archive
+          javac --release 8 -d out/theme-archive wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/tests/ThemeArchiveCaptureTest.java
+          java -cp out/theme-archive hmgapi.mods.wireless.ThemeArchiveCaptureTest
+
+      - name: Experimental decoded theme transfer regression
+        run: |
+          mkdir -p out/theme-session
+          javac --release 8 -d out/theme-session wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/tests/ThemeTransferSessionTest.java
+          java -cp out/theme-session hmgapi.mods.wireless.ThemeTransferSessionTest
+
+      - name: Experimental bounded OPACK regression
+        run: |
+          mkdir -p out/theme-opack
+          javac --release 8 -d out/theme-opack wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeArchiveCapture.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeTransferSession.java wireless-carplay-aa/src/hmgapi/mods/wireless/ThemeOpack.java wireless-carplay-aa/tests/ThemeOpackTest.java
+          java -cp out/theme-opack hmgapi.mods.wireless.ThemeOpackTest
+
+      - name: CPUL native ownership boundary regression
+        run: python3 wireless-carplay-aa/tests/cpul_native_ownership.py

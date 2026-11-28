@@ -1,6 +1,6 @@
 # FileTransfer research disposition — WCP RC7
 
-Status: closed for the current RC; future compatibility work deferred, not implemented. Primary shared identity API v3 remains the pinned source integration checkpoint. No release authorized.
+Status: superseded by user-directed RC7 scope expansion. Experimental theme archive reception is back in scope; no transport implementation or runtime activation yet. Primary shared identity API v3 remains the pinned source integration checkpoint. No release authorized.
 
 ## Remote-control stream type 130: modern sender/receiver versus K5
 This pass reopened actual extracted AirPlaySender and AirPlayReceiver Mach-O binaries; SHA256 respectively 96f315f0b95f0467e877f611d78052245e15071fbd5d543b1ebff6488085efc7 and 5600c43e303f4689745ac15b87d0b249cd784995bfde17b81d1914fe3036ee1a. Inspected /tmp/wcp-aps-dis.txt and regenerated /tmp/wcp-apr-dis.txt with llvm-objdump --macho --disassemble. Rechecked K5 /tmp/wcp-rx/libCarPlayCore.so MD5 d3a47296437df56fb1ffc7ac3dfca4cb with Thumb disassembly.
@@ -15,3 +15,9 @@ Compare fresh and existing pairing, preserving explicit Ultra/Classic choice. Re
 
 ## Progress disposition
 Primary shared identity implementation 100%; current RC FileTransfer research decision complete. Transport identification: channel and generic stream setup established; exact wire/receiver support remains unresolved (95% research estimate, not implementation). Application protocol research 75%, deferred; FTv2 translation, native recipe and conditional implementation 0%, not planned for this RC. No vehicle tests claimed. CI for parent: [{"status":"in_progress","conclusion":null,"url":"https://github.com/Nyx-Asteria/hmgapi-wireless-cp-aa/actions/runs/46079843016"}].
+
+## Scope reopened — RC7 experimental implementation
+User requested FileTransfer in this build after reviewing its potential value. Implement as an independent, default-inactive feature; prioritize quarantine/capture of actual theme archives, not claiming installed theme assets. The prior compatibility gap remains valid. Do not conflate legacy iAP2 FTv2 with the modern RCS channel. First component ThemeArchiveCapture accepts already-decoded ordered chunks, enforces local size/count policy and final SHA-256, publishes to a private quarantine file only, removes partial files on cancellation/error. No caller or setting yet; cannot advertise or receive on vehicle. Host regression wired to CI, pending. Next: independently confirm full header/payload schemas and client UUID, OPACK decode/encode fixtures, then trace K5 INFO and authenticated type-130 setup/data transport, implement guarded integration only with actual evidence. No archive extraction, signature bypass, synthetic installed version, or capability claims before full receiver readiness. Local bounds are policy not Apple limits. Integration and vehicle testing still required.
+
+## Native integration coordination
+CPUL already owns unsupported-stream dispatcher, INFO and SETUP verification regions; standalone WCP recipe is prohibited. See docs/cpul-filetransfer-integration.md for pinned review and proposed single-owner design. No cross-mod contract approved. New bounded scalar OPACK decoder is host-only; synthetic fixtures, not real phone traffic.
