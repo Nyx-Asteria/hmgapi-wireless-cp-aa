@@ -56,16 +56,22 @@ jobs:
       - name: RC8 pre-projection startup recording and verified export
         run: python3 wireless-carplay-aa/tests/startup_recording_test.py
 
+      - name: Install ARM regression toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq clang lld llvm qemu-system-arm
+          for tool in clang ld.lld llvm-objcopy qemu-system-arm; do
+            command -v "$tool"
+            "$tool" --version | head -n 1
+          done
+
       - name: RC8 ARM identity library compilation
         run: |
           mkdir -p out/rc8-native
           sh wireless-carplay-aa/native/identity/build.sh "$PWD/out/rc8-native/libcarplayidentity.so"
 
       - name: RC8 identity and StartSession wire vectors
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -yq qemu-system-arm llvm
-          python3 wireless-carplay-aa/native/identity/test_equivalence.py
+        run: python3 wireless-carplay-aa/native/identity/test_equivalence.py
 
       - name: Java session export regression
         run: |
