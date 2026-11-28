@@ -6,7 +6,7 @@ name: CI
 
 on:
   push:
-    branches: [main, k5-log2-cleanup, rc7-final, rc8-recovery]
+    branches: [main, k5-log2-cleanup, rc7-final, rc8-recovery, rc9-recovery]
   pull_request:
   workflow_call:
 

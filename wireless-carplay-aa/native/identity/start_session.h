@@ -96,13 +96,16 @@ static int start_append(Blob stock,unsigned char *buf,int cap,u32 id,u32 x,u32 y
     if(!stock)return -1;
     int n=stock(buf,cap,id,x,y);
     if(n<0)return n;
-    if(!start_len || (n&1) || n>START_CAP_PROBE_MAX)return n;
+    if(!start_len || (n&1) || n>2147483645)return n;
+    /* The scratch-buffer limit applies only to the duplicate probe.
+       Legacy append uses the caller's capacity, not a local scratch buffer. */
     if(!(rc7_mode&4)){
         if(!buf)return n+2;
         if(cap<n || cap-n<2)return n;
         buf[n]=0x43;buf[n+1]=last;
         start_capability_seen|=last==1?1U:2U;return n+2;
     }
+    if(n>START_CAP_PROBE_MAX)return n;
     if(!buf){
         unsigned char probe[START_CAP_PROBE_MAX]={0};
         if(n && stock(probe,n,id,x,y)!=n)return n;

@@ -269,6 +269,12 @@ int test_main(void){
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=6
        || capabilities[4]!=0x43 || capabilities[5]!=1 || start_capability_seen!=1)FAIL_CHECK();
     if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)FAIL_CHECK();
+    /* Legacy sizing does not use the probe scratch buffer. */
+    fixture_blob_size=1026;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=1028 || start_append(fixture_blob,capabilities,8,0,0,0,1)!=1026)FAIL_CHECK();
+    fixture_blob_size=2147483646;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=2147483646)FAIL_CHECK();
+    fixture_blob_size=4;
     start_clear_locked();rc7_mode=7;
     /* Framing of top-level and nested codec parameters. */
     static const unsigned char framed[]={0,9,0,1,0,5,0,0,'S',0,4,0,99};
