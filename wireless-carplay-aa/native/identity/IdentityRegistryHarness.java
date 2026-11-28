@@ -97,9 +97,16 @@ public final class IdentityRegistryHarness {
         CarPlayIdentification.NegotiationStatus observed=registry.negotiationStatus();
         check(observed.themeBuilt && !observed.vehicleBuilt && observed.startArmed
                 && observed.startSendCapability && observed.startReceiveCapability,"independent theme evidence");
+        check(registry.clearSessionEvidence(cpulSnapshot.generation),"immediate session invalidation");
+        check(registry.negotiationStatus().themeBuilt && !registry.negotiationStatus().startArmed
+                && !registry.negotiationStatus().startReceiveCapability,"withdrawal preserves theme only");
         check(registry.reportNegotiation(cpulSnapshot.generation,2,3,false),"withdrawal report accepted");
         check(!registry.negotiationStatus().startSendCapability && !registry.negotiationStatus().startArmed,"withdrawal masks capability evidence");
+        check(registry.reportNegotiation(cpulSnapshot.generation,2,3,true),"session rearmed");
+        check(registry.report(cpulSnapshot.generation,CarPlayIdentification.Readiness.FAILED,"fixture"),"failure report");
+        check(!registry.negotiationStatus().themeBuilt && !registry.negotiationStatus().startArmed,"failure invalidates evidence");
         registry.removeTheme("fixture.cpul");
+        check(!registry.clearSessionEvidence(cpulSnapshot.generation),"stale withdrawal rejected");
         check(registry.identityStatus().readiness==CarPlayIdentification.Readiness.UNAVAILABLE,"CPUL withdrawal");
         check(!registry.reportNegotiation(cpulSnapshot.generation,7,3,true),"stale evidence rejected");
         check(!registry.negotiationStatus().themeBuilt && !registry.negotiationStatus().startRequested

@@ -31,6 +31,14 @@ final class IdentityRegistry implements CarPlayIdentification {
         return true;
     }
 
+    /** Immediately revoke session evidence before a native replacement or withdrawal. */
+    synchronized boolean clearSessionEvidence(long expected) {
+        if(expected!=generation || suspended)return false;
+        negotiation=new NegotiationStatus(generation,negotiation.vehicleBuilt,negotiation.themeBuilt,
+                themeSessionStart(),false,false,false);
+        return true;
+    }
+
     static final class Snapshot {
         final long generation;
         final VehicleIdentity vehicle;
@@ -64,6 +72,8 @@ final class IdentityRegistry implements CarPlayIdentification {
     synchronized boolean report(long expected, Readiness readiness, String reason) {
         if(expected!=generation || suspended) return false;
         status=new IdentityStatus(generation,readiness,reason);
+        if(readiness==Readiness.FAILED || readiness==Readiness.UNAVAILABLE || readiness==Readiness.PREPARED)
+            negotiation=new NegotiationStatus(generation,false,false,themeSessionStart(),false,false,false);
         return true;
     }
 

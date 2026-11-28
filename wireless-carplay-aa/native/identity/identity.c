@@ -106,7 +106,7 @@ static Param parameter(u16 id,u16 type){Param p={1,id,type,0,0,0,0,0};return p;}
 static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void *table,u32 count,const char *name,Lookup lookup){
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE) || command!=0x1d01 || table!=root_table || count!=24)
         return raw_builder(handle,session,a,b,command,table,count,name,lookup);
-    if(lock_mutex(&identity_mutex))return 0;
+    if(lock_mutex(&identity_mutex))return raw_builder(handle,session,a,b,command,table,count,name,lookup);
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){unlock_mutex(&identity_mutex);return raw_builder(handle,session,a,b,command,table,count,name,lookup);}
     identity_seen=0;theme_children_active=0;start_capability_seen=0;
     stock_children=0;stock_wireless_lookup=0;build_lookup=lookup;
@@ -125,7 +125,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
     u32 required=(has_vehicle?5:0)|(has_theme?2:0);
     if(result)__atomic_store_n(&identity_evidence,identity_seen,__ATOMIC_RELEASE);
     else __atomic_store_n(&identity_evidence,0,__ATOMIC_RELEASE);
-    if(result && required && (identity_seen&required)==required)
+    if(result && required && (identity_seen&required)==required && __atomic_load_n(&configured,__ATOMIC_ACQUIRE))
         __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
     build_lookup=0;stock_wireless_lookup=0;
     unlock_mutex(&identity_mutex);return result;
@@ -153,10 +153,12 @@ static int bind(void){
     if(!protect_page || !lock_mutex || !unlock_mutex)return -20;
     if(!raw_builder)return -21;
     if(!root_table || !root_lookup)return -22;
-    if(!info_lookup || !get_info)return -23;
-    if(!status_lookup || !get_status)return -24;
-    u32 n=0;info_table=get_info(&n);if(n!=5 || !info_table)return -25;
-    status_table=get_status(&n);if(n!=13 || !status_table)return -26;
+    // Vehicle tables are optional for a theme-only contribution. Validate
+    // their availability separately before configuring a vehicle profile.
+    u32 n=0;info_table=0;status_table=0;
+    if(info_lookup && get_info){const Param *p=get_info(&n);if(n==5)info_table=p;}
+    n=0;
+    if(status_lookup && get_status){const Param *p=get_status(&n);if(n==13)status_table=p;}
     start_bind(lib); /* optional, no change to stock identification if unavailable */
     return 0;
 }
@@ -184,10 +186,12 @@ static int theme_tuple_ok(const char *s,u32 n){
     return i>begin && i-begin<=24;
 }
 static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc,int ac_type,u32 ac,const char *theme_id,u32 theme_len,int legacy){
-    if(!hook_mailbox){int rc=bind();if(rc)return rc;}
+    if(!hook_mailbox){int rc=bind();if(rc){hook_mailbox=0;return rc;}}
     int vehicle=len!=0,themed=theme_len!=0;
     if(!vehicle && !themed)return -12;
     int ev=vehicle && engine_type==2;
+    if(vehicle && (!info_lookup || !info_table))return -23;
+    if(ev && (!status_lookup || !status_table))return -24;
     if(vehicle && (!string_ok(name,len) || len>320 || engine_type<0 || engine_type>3))return -12;
     if(ev && (dc_type<0 || dc_type>1 || ac_type!=2 || !dc || dc>1000000 || !ac || ac>1000000))return -12;
     if(vehicle && !ev && (dc_type!=-1 || ac_type!=-1 || dc || ac))return -12;
@@ -213,8 +217,10 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
         info_copy[5]=parameter(11,8);info_copy[5].init=(u32)connector_dc;
         info_copy[6]=parameter(11,8);info_copy[6].init=(u32)connector_ac;
         info_copy[7]=parameter(12,6);info_copy[8]=parameter(14,6);
-        for(u32 i=0;i<13;i++){status_copy[i]=status_table[i];u16 id=status_copy[i].id;if(id==3 || id==6 || id==11 || id==15)status_copy[i].used=1;}
-        status_copy[13]=parameter(21,12);status_copy[14]=parameter(30,12);
+        if(ev){
+            for(u32 i=0;i<13;i++){status_copy[i]=status_table[i];u16 id=status_copy[i].id;if(id==3 || id==6 || id==11 || id==15)status_copy[i].used=1;}
+            status_copy[13]=parameter(21,12);status_copy[14]=parameter(30,12);
+        }
     }
     __atomic_store_n(&configured,1,__ATOMIC_RELEASE);int result=set_handler((u32)identity_builder);
     if(result)__atomic_store_n(&configured,0,__ATOMIC_RELEASE);
@@ -260,6 +266,22 @@ JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence
     (void)env;(void)cls;
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE))return 0;
     return (int)__atomic_load_n(&identity_evidence,__ATOMIC_ACQUIRE);
+}
+/* Read the related builder fields under one lock, rather than combining
+ * independent JNI observations from potentially different builds. */
+JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(JNIEnv *env,jclass cls){
+    (void)env;(void)cls;
+    if(!lock_mutex || !unlock_mutex)return 0;
+    if(lock_mutex(&identity_mutex))return -1; // observation unavailable, not a negative result
+    u32 bits=0;
+    if(__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){
+        bits=__atomic_load_n(&identity_evidence,__ATOMIC_ACQUIRE)&7;
+        bits|=(__atomic_load_n(&start_capability_built,__ATOMIC_ACQUIRE)&3)<<3;
+        if(start_len)bits|=32;
+        if(__atomic_load_n(&identity_built,__ATOMIC_ACQUIRE))bits|=64;
+    }
+    unlock_mutex(&identity_mutex);
+    return (jint)bits;
 }
 JNIEXPORT jint JNICALL Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(JNIEnv *env,jclass cls,jint which){
     (void)env;(void)cls;

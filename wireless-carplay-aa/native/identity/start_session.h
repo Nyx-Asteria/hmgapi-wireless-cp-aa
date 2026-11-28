@@ -88,14 +88,22 @@ static u32 start_notify(u32 link,u32 session,const unsigned char *params,u32 n){
     __atomic_add_fetch(&start_sends,1,__ATOMIC_RELEASE);
     return 0;
 }
+/* Bound the sizing probe to a small complete capability list. A probe is
+ * never published as evidence. If the OEM cannot reproduce its reported
+ * length, leave the sizing result unchanged rather than guessing. */
+#define START_CAP_PROBE_MAX 1024
 static int start_append(Blob stock,unsigned char *buf,int cap,u32 id,u32 x,u32 y,unsigned char last){
     if(!stock)return -1;
     int n=stock(buf,cap,id,x,y);
     if(n<0)return n;
-    // Only extend complete 16-bit ID lists. The sizing pass reserves
-    // an upper bound because OEM contents are not yet available.
-    if(!start_len || (n&1) || n>2147483645)return n;
-    if(!buf)return n+2;
+    if(!start_len || (n&1) || n>START_CAP_PROBE_MAX)return n;
+    if(!buf){
+        unsigned char probe[START_CAP_PROBE_MAX]={0};
+        if(n && stock(probe,n,id,x,y)!=n)return n;
+        for(int i=0;i<n;i+=2)
+            if(probe[i]==0x43 && probe[i+1]==last)return n;
+        return n+2;
+    }
     if(cap<n)return n;
     for(int i=0;i<n;i+=2)
         if(buf[i]==0x43 && buf[i+1]==last){
@@ -147,10 +155,10 @@ static int start_configure(const unsigned char *msg,u32 len){
     }
     int sent=0,received=0;
     for(u32 i=0;i<24;i++){
-        if(root_table[i].id==6 && root_table[i].length)sent=1;
-        if(root_table[i].id==7 && root_table[i].length)received=1;
+        if(root_table[i].id==6 && root_table[i].length)sent++;
+        if(root_table[i].id==7 && root_table[i].length)received++;
     }
-    if(!sent || !received){unlock_mutex(&identity_mutex);return -20;}
+    if(sent!=1 || received!=1){unlock_mutex(&identity_mutex);return -20;}
     StartHandler *h=&handlers[33];
     /* Same verified stock duplicate 0x5202 slot as the bundled original.
        Never overwrite an unknown handler or a foreign extension. */

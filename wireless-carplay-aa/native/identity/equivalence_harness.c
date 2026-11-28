@@ -51,6 +51,12 @@ static int mutex(void *p){(void)p;return 0;}
 static int protect_fail;
 static int protect(void *p,u32 n,int flags){(void)p;(void)n;(void)flags;return protect_fail;}
 static int mutex_fail(void *p){(void)p;return 1;}
+static u32 fixture_fallback_calls;
+static u32 fallback_build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 count,const char *name,Lookup lookup){
+    (void)h;(void)s;(void)a;(void)b;(void)name;
+    if(cmd==0x1d01 && table==root_table && count==24 && lookup==root_lookup)fixture_fallback_calls++;
+    return 23;
+}
 static u32 fixture_packet[3],fixture_destroyed,fixture_malloc_calls;
 static unsigned char fixture_payload[START_MAX];
 static u32 fixture_payload_destroyed,fixture_sent;
@@ -92,6 +98,25 @@ static int fixture_blob(unsigned char *buf,int cap,u32 id,u32 x,u32 y){
     if(buf && cap>=fixture_blob_size && fixture_blob_size>=0 && fixture_blob_size<=4)
         for(int i=0;i<fixture_blob_size;i++)buf[i]=fixture_blob_bytes[i];
     return fixture_blob_size;
+}
+static int fixture_blob_unstable(unsigned char *buf,int cap,u32 id,u32 x,u32 y){
+    (void)cap;(void)id;(void)x;(void)y;
+    return buf?2:4;
+}
+static int fixture_builder_success=1,fixture_builder_sizing_only=0;
+static u32 capability_build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 count,const char *name,Lookup lookup){
+    (void)h;(void)s;(void)a;(void)b;(void)cmd;(void)name;(void)lookup;
+    const Param *p=table;
+    for(u32 i=0;i<count;i++){
+        if(p[i].id!=6 && p[i].id!=7)continue;
+        Blob callback=(Blob)p[i].length;
+        unsigned char bytes[8]={0};
+        int n=callback(0,0,p[i].id,0,0);
+        if(n!=(p[i].id==6?4:6)){result|=1;return 0;}
+        if(!fixture_builder_sizing_only && callback(bytes,n,p[i].id,0,0)!=n){result|=1;return 0;}
+        if(!fixture_builder_sizing_only && (bytes[n-2]!=0x43 || bytes[n-1]!=(p[i].id==6?1:0)))result|=1;
+    }
+    return fixture_builder_success;
 }
 static void semihost(u32 operation,const void *argument);
 int test_main(void){
@@ -185,7 +210,8 @@ int test_main(void){
     // Preserve OEM capability IDs; append only while a response is armed.
     unsigned char capabilities[8]={0};
     start_len=6;start_capability_seen=0;
-    if(start_append(fixture_blob,0,0,0,0,0,1)!=6 || start_capability_seen)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=4 || start_capability_seen)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,0)!=6 || start_capability_seen)result|=1;
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=4
        || capabilities[0]!=0x1d || capabilities[1]!=1 || capabilities[2]!=0x43 || capabilities[3]!=1 || start_capability_seen!=1)result|=1;
     if(start_append(fixture_blob,capabilities,8,0,0,0,0)!=6
@@ -196,6 +222,9 @@ int test_main(void){
        || start_append(fixture_blob,capabilities,8,0,0,0,1)!=3)result|=1;
     fixture_blob_size=-1;
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=-1)result|=1;
+    if(start_append(fixture_blob_unstable,0,0,0,0,0,0)!=4)result|=1;
+    fixture_blob_size=1026;
+    if(start_append(fixture_blob,0,0,0,0,0,0)!=1026)result|=1;
     fixture_blob_size=2147483647;
     if(start_append(fixture_blob,0,0,0,0,0,1)!=2147483647)result|=1;
     fixture_blob_size=4;__atomic_store_n(&start_capability_built,3,__ATOMIC_RELEASE);
@@ -263,6 +292,57 @@ int test_main(void){
        || start_sends!=before+2 || start_last!=1)result|=1;
     if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,7)!=1
        || Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,8)!=1)result|=1;
+    // Theme-only and gasoline contributions do not require EV status support.
+    info_table=0;status_table=0;
+    if(configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || !has_theme || has_vehicle)result|=1;
+    if(configure("Kia K5",6,0,-1,0,-1,0,"",0,0)!=-23)result|=1;
+    info_table=stock_info;
+    if(configure("Kia EV6",7,2,0,235000,2,10900,"",0,0)!=-24)result|=1;
+    if(configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || has_ev)result|=1;
+    status_table=stock_status;
+    // A busy or failed identity lock cannot prevent stock identification.
+    raw_builder=fallback_build;lock_mutex=mutex_fail;
+    if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)result|=1;
+    raw_builder=build;lock_mutex=mutex;
+    // Ambiguous capability tables must not arm the optional session handler.
+    static StartHandler fixture_handlers[34];
+    static const unsigned char valid_empty[]={0x40,0x40,0,6,0x43,1};
+    handlers=fixture_handlers;
+    fixture_handlers[32].id=fixture_handlers[33].id=0x5202;
+    root[3]=parameter(6,12);root[3].length=(u32)fixture_blob;
+    root[4]=parameter(7,12);root[4].length=(u32)fixture_blob;
+    root[5]=root[3];
+    if(start_configure(valid_empty,sizeof(valid_empty))!=-20 || start_len || fixture_handlers[33].id!=0x5202)result|=1;
+    root[5]=root[4];
+    if(start_configure(valid_empty,sizeof(valid_empty))!=-20 || start_len || fixture_handlers[33].id!=0x5202)result|=1;
+    root[5]=(Param){0};
+    if(start_configure(valid_empty,sizeof(valid_empty))!=0 || start_len!=6 || fixture_handlers[33].id!=AVAILABILITY)result|=1;
+    start_clear_locked();
+    // Exercise both wrapped callbacks through a real matching builder.
+    root[3]=parameter(6,12);root[3].length=(u32)fixture_blob;
+    root[4]=parameter(7,12);root[4].length=(u32)fixture_blob;
+    raw_builder=capability_build;start_len=6;
+    identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(start_capability_built!=3)result|=1;
+    fixture_builder_success=0;
+    identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(start_capability_built)result|=1;
+    fixture_builder_success=1;fixture_builder_sizing_only=1;
+    identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
+    if(start_capability_built)result|=1;
+    root[3].used=root[4].used=0;root[3].length=root[4].length=0;
+    raw_builder=build;
+    // Coherent JNI snapshot includes the actual native payload state.
+    start_len=6;
+    __atomic_store_n(&identity_evidence,7,__ATOMIC_RELEASE);
+    __atomic_store_n(&start_capability_built,3,__ATOMIC_RELEASE);
+    __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=127)result|=1;
+    start_clear_locked();
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=71)result|=1;
+    lock_mutex=mutex_fail;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=-1)result|=1;
+    lock_mutex=mutex;
     // Shutdown must report native failures and be safe to retry.
     lock_mutex=mutex_fail;
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-15 || configured || identity_built)result|=1;
@@ -270,7 +350,8 @@ int test_main(void){
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-19 || start_len)result|=1;
     protect_fail=0;
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=0 || mailbox || start_len
-       || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0))result|=1;
+       || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)
+       || Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0))result|=1;
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";
