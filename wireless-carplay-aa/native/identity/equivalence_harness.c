@@ -11,7 +11,7 @@ void *memset(void *d,int v,u32 n){unsigned char *a=d;while(n--)*a++=(unsigned ch
 void __aeabi_memset(void *d,u32 n,int v){memset(d,v,n);}
 void __aeabi_memset4(void *d,u32 n,int v){memset(d,v,n);}
 void __aeabi_memset8(void *d,u32 n,int v){memset(d,v,n);}
-void __aeabi_memclr(void *d,u32 n){memset(d,0,n);}
+/* __aeabi_memclr is already provided by included identity.c. */
 void __aeabi_memclr4(void *d,u32 n){memset(d,0,n);}
 void __aeabi_memclr8(void *d,u32 n){memset(d,0,n);}
 

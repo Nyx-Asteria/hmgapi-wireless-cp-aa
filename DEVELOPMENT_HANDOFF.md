@@ -1,3 +1,7 @@
+# RC8 harness duplicate helper repair
+
+Parent 1444f541685eb330530478b772c2077e2838109e: CI 46106906316 failed at ARM harness compilation because identity.c already defines __aeabi_memclr. Production mod/package and Java wire-vector tests passed. Remove only duplicate fixture definition; retain other helpers and test assertions. Release 46106906304 has failed journal gate; no verified signed artifact for latest runtime. New release-trigger commit requires fresh CI and permanent signing; HTTP 403 publication fallback remains in place. No production changes.
+
 # RC8 freestanding harness link repair
 
 Parent 0bc0fc4ad974e19e2888e55ba323230ce5320f0c: CI 46105088798 and release 46105088767 failed. Toolchain preflight succeeded; Java identity/codec tests, independent startup USB fixture, native recipe gate equivalence and production mod/package job passed. QEMU test image failed linking with undefined memset (compiler-generated zero initialization in a freestanding executable). Add test-only byte fill and ARM EABI wrappers to harness; production identity code and all test assertions unchanged. New run pending; do not claim signed recovery ZIP is available until verified. USB failure evidence reinforces existing RC6-compatible defaults but does not identify a confirmed cause. CPUK5 native receiver remains a separate suspect; no companion edits.
