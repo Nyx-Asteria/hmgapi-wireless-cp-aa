@@ -9,6 +9,7 @@ final class StartSessionCodec {
     private StartSessionCodec() {}
     static byte[] encode(String ssid,String passphrase,int channel,List<String> ips,int security,int port,
                          String deviceId,String publicKey,String sourceVersion,String sdkVersion,String assetId,long assetVersion) {
+        if(channel < -1 || channel > 255)throw new IllegalArgumentException("channel");
         ByteArrayOutputStream wifi=new ByteArrayOutputStream();
         if(ssid!=null)param(wifi,0,str(ssid));
         if(passphrase!=null)param(wifi,1,str(passphrase));

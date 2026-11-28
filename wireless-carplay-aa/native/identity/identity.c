@@ -22,6 +22,7 @@ static Mutex lock_mutex,unlock_mutex;
 static u32 identity_mutex;
 static int configured,has_vehicle,has_theme,legacy_theme,has_ev;
 static u32 identity_built, identity_seen;
+static int theme_children_active;
 static char display_name[321];
 static char theme[97];
 static u32 dc_w,ac_w,engine=2,connector,dc_connector,ac_connector;
@@ -57,7 +58,10 @@ static void *info_value(u16 id,u16 type,u16 *n,void *key,int *more){
 }
 static void *status_value(u16 id,u16 type,u16 *n,void *key,int *more){return status_lookup(id,type,n,key,more);}
 static void *wireless_value(u16 id,u16 type,u16 *n,void *key,int *more){
-    if(id==6 || (legacy_theme && id==5)){if(more)*more=0;return theme;}
+    if(theme_children_active && (id==6 || (legacy_theme && id==5))){
+        if(id==6)identity_seen|=2;
+        if(more)*more=0;return theme;
+    }
     return wireless_lookup(id,type,n,key,more);
 }
 #include "start_session.h"
@@ -68,18 +72,17 @@ static const Param *identity_children(u16 id,u16 type,u16 *count,void *key,int *
     if(id==20 && has_vehicle){identity_seen|=1;*count=has_ev?9:5;return info_copy;}
     if(id==21 && has_ev){*count=15;return status_copy;}
     if(id==WIRELESS_GROUP && stock_children){
-        u32 n=0;const Param *stock=stock_children(id,type,(u16*)&n,key,more);
-        if(!stock || n>WIRELESS_MAX){*count=(u16)n;return stock;}
-        identity_seen|=2;
-        /* LIVI advertises only the asset identifier in transport group 24,
-           parameter 6. Preserve stock parameter 5 and avoid duplicate 6. */
-        if(legacy_theme){
-            for(u32 i=0;i<n;i++)wireless_copy[i]=stock[i];
-            wireless_copy[n]=parameter(5,12);wireless_copy[n+1]=parameter(6,10);
-            *count=(u16)(n+2);if(more)*more=0;return wireless_copy;
-        }
+        theme_children_active=0;
+        u16 n=0;const Param *stock=stock_children(id,type,&n,key,more);
+        if(!stock || n>WIRELESS_MAX){*count=n;return stock;}
+        theme_children_active=1;
+        /* Legacy K5 format owns parameters 5/6; asset-only mode owns
+           parameter 6 and leaves stock parameter 5 intact. Replace rather
+           than append duplicate IDs if the OEM already supplies them. */
         u32 used=0;
-        for(u32 i=0;i<n;i++)if(stock[i].id!=6)wireless_copy[used++]=stock[i];
+        for(u32 i=0;i<n;i++)
+            if(stock[i].id!=6 && !(legacy_theme && stock[i].id==5))wireless_copy[used++]=stock[i];
+        if(legacy_theme)wireless_copy[used++]=parameter(5,12);
         wireless_copy[used++]=parameter(6,10);
         *count=(u16)used;if(more)*more=0;return wireless_copy;
     }
@@ -97,7 +100,7 @@ static u32 identity_builder(u32 handle,u32 session,u32 a,u32 b,u32 command,void 
         return raw_builder(handle,session,a,b,command,table,count,name,lookup);
     if(lock_mutex(&identity_mutex))return 0;
     if(!__atomic_load_n(&configured,__ATOMIC_ACQUIRE)){unlock_mutex(&identity_mutex);return raw_builder(handle,session,a,b,command,table,count,name,lookup);}
-    identity_seen=0;
+    identity_seen=0;theme_children_active=0;
     Param root[24];for(u32 i=0;i<24;i++){
         root[i]=root_table[i];
         if(start_len && root[i].id==6 && root[i].length){stock_sent_blob=(Blob)root[i].length;root[i].length=(u32)start_sent_blob;}
@@ -159,8 +162,8 @@ static int configure(const char *name,u32 len,int engine_type,int dc_type,u32 dc
     start_clear_locked();
     __atomic_store_n(&identity_built,0,__ATOMIC_RELEASE);
     has_vehicle=vehicle;has_ev=ev;has_theme=themed;legacy_theme=themed && legacy;
-    /* API v2 still accepts the complete tuple; identification carries only
-       its asset identifier. StartSessionCodec carries version and SDK. */
+    /* Legacy identification carries the full tuple; asset-only mode
+       carries just its identifier. StartSessionCodec carries version/SDK. */
     u32 asset_len=0;
     while(asset_len<theme_len && (legacy_theme || theme_id[asset_len]!=':'))asset_len++;
     copy(theme,theme_id,asset_len);theme[asset_len]=0;

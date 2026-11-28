@@ -9,7 +9,8 @@ void *__aeabi_memcpy4(void *d,const void *s,u32 n){return __aeabi_memcpy(d,s,n);
 char output[6][1024];
 int result;
 static u32 at,value=42,mailbox,slot;
-static Param root[24],stock_info[5],stock_status[13],stock_wireless[2];
+static Param root[24],stock_info[5],stock_status[13],stock_wireless[WIRELESS_MAX+1];
+static u16 stock_wireless_count=2;
 static void put(const char *s){while(*s && at<sizeof(output[0])-1)output[slot][at++]=*s++;output[slot][at]=0;}
 static void num(u32 v){
     static const u32 powers[]={1000000000,100000000,10000000,1000000,100000,10000,1000,100,10,1};int started=0;
@@ -25,7 +26,7 @@ static void *root_values(u16 id,u16 type,u16 *n,void *key,int *more){
     if(id==20 || id==21)return (void*)stock_lookup;if(id==24)return (void*)wireless_values;return &value;
 }
 static const Param *stock_wireless_children(u16 id,u16 type,u16 *count,void *key,int *more){
-    (void)id;(void)type;(void)key;if(more)*more=0;*count=2;return stock_wireless;
+    (void)id;(void)type;(void)key;if(more)*more=0;*count=stock_wireless_count;return stock_wireless;
 }
 static void walk(const Param *table,u32 count,Lookup lookup,u16 group){
     for(u32 i=0;i<count;i++){
@@ -105,6 +106,33 @@ int test_main(void){
     result|=configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=5;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     if(configure("Kia K5",6,0,0,235000,2,10900,"",0,0)!=-12)result|=1;
+    // Exercise OEM tables that already contain theme IDs; preserve other
+    // entries, replace only those owned by the selected format.
+    stock_wireless[2]=parameter(5,12);stock_wireless[3]=parameter(6,10);
+    stock_wireless_count=4;
+    u16 child_count=0;int more=0;
+    const Param *children=identity_children(24,13,&child_count,0,&more);
+    if(child_count!=4 || children[0].id!=0 || children[1].id!=1
+       || children[2].id!=5 || children[2].type!=12
+       || children[3].id!=6 || children[3].type!=10)result|=1;
+    legacy_theme=0;
+    stock_wireless[2]=parameter(5,8);
+    children=identity_children(24,13,&child_count,0,&more);
+    if(child_count!=4 || children[2].id!=5 || children[2].type!=8
+       || children[3].id!=6 || children[3].type!=10)result|=1;
+    legacy_theme=1;
+    // A child list alone is not evidence that the theme value was consumed.
+    identity_seen=0;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(!theme_children_active || (identity_seen&2))result|=1;
+    if(wireless_value(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))result|=1;
+    // Unsupported stock table size must retain stock values, not inject
+    // the configured theme through the lookup wrapper.
+    identity_seen=0;stock_wireless_count=WIRELESS_MAX+1;
+    children=identity_children(24,13,&child_count,0,&more);
+    if(children!=stock_wireless || child_count!=WIRELESS_MAX+1 || theme_children_active
+       || wireless_value(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
+    stock_wireless_count=2;
     /* Rejecting malformed replacements must erase the old native payload. */
     static const unsigned char invalid[]={0x40,0x40,0,6,0x43,0};
     start_len=6;for(u32 i=0;i<6;i++)start_msg[i]=0x55;

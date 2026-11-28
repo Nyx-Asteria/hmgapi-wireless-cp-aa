@@ -12,6 +12,7 @@ final class IdentityInstaller {
     private static boolean loaded, armed;
     private static long armedGeneration=-1;
     private static byte[] lastStart;
+    private static final StartWithdrawal withdrawal=new StartWithdrawal();
     private static String lastStartNotice = "";
     private static boolean watcherStarted;
 
@@ -87,6 +88,7 @@ final class IdentityInstaller {
         try {
         if(loaded) NativeIdentity.shutdown();
         lastStart=null;
+        withdrawal.setPending(loaded);
         if(vehicle==null && theme==null) return;
         int dcType = -1, dcPower = 0, acType = -1, acPower = 0;
         if (vehicle != null) {
@@ -113,6 +115,7 @@ final class IdentityInstaller {
             if(!registry.report(snapshot.generation,CarPlayIdentification.Readiness.ARMED,"native configure succeeded")) {
                 NativeIdentity.shutdown(); return;
             }
+            withdrawal.setPending(false); // successful native configure clears its payload
             armed = true;
             armedGeneration=snapshot.generation;
             mod.log("CarPlay identity: generation="+armedGeneration+" armed");
@@ -125,7 +128,7 @@ final class IdentityInstaller {
             throw new AssertionError(impossible);
         }
         } catch(Throwable error) {
-            armed=false; armedGeneration=-1; lastStart=null;
+            armed=false; armedGeneration=-1; lastStart=null; withdrawal.setPending(loaded);
             if(loaded) try { NativeIdentity.shutdown(); } catch(Throwable ignored) {}
             registry.report(snapshot.generation,CarPlayIdentification.Readiness.FAILED,
                     error instanceof NativeFailure ? "native configure="+((NativeFailure)error).code : error.getClass().getSimpleName());
@@ -133,9 +136,20 @@ final class IdentityInstaller {
         }
     }
 
-    private static void clearStart() {
-        if (loaded) NativeIdentity.startSession(new byte[0]);
-        lastStart = null;
+    private static boolean clearStart(ModContext mod) {
+        lastStart=null;
+        if(!loaded){withdrawal.setPending(false);return true;}
+        withdrawal.setPending(true);
+        try {
+            int rc=withdrawal.clear(new StartWithdrawal.NativeClear(){
+                @Override public int run(){return NativeIdentity.startSession(new byte[0]);}
+            });
+            if(rc!=0){notice(mod,"native withdrawal pending ("+rc+")");return false;}
+            return true;
+        }catch(Throwable error){
+            notice(mod,"native withdrawal pending ("+error.getClass().getSimpleName()+")");
+            return false;
+        }
     }
 
     private static void notice(ModContext mod, String status) {
@@ -146,33 +160,38 @@ final class IdentityInstaller {
     }
 
     private static synchronized void refreshStart(ModContext mod, LoadedApp app, IdentityRegistry registry) {
-        if (!loaded || !armed) return;
+        if (!loaded) return;
+        if(withdrawal.pending() && !clearStart(mod))return;
+        if(!armed)return;
         IdentityRegistry.Snapshot snapshot=registry.snapshot();
-        if(snapshot.generation!=armedGeneration) { clearStart(); return; }
+        if(snapshot.generation!=armedGeneration) { clearStart(mod); return; }
         CarPlayIdentification.ThemeIdentity theme = snapshot.theme;
         if (!mod.enabled() || !mod.settingBoolean("bridge", true) || theme == null || !snapshot.start) {
-            if (lastStart != null) clearStart();
+            if (lastStart != null && !clearStart(mod)) return;
             notice(mod, "extension not requested");
             return;
         }
         try {
-            byte[] msg = StartSession.build(app.context, theme);
+            StartSession.Preparation preparation=StartSession.prepare(app.context, theme);
+            byte[] msg=preparation.message;
             if (msg == null) {
-                if (lastStart != null) clearStart();
-                notice(mod, "waiting for verified K5 receiver and hotspot; stock startup retained");
+                if (lastStart != null && !clearStart(mod)) return;
+                notice(mod, "preparation blocked=" + preparation.blocker.name() + "; stock startup retained");
                 return;
             }
             if (java.util.Arrays.equals(lastStart, msg)) return;
+            withdrawal.setPending(true); // failed/throwing native call may leave an older payload
             int result = NativeIdentity.startSession(msg);
             if (result != 0) {
-                clearStart();
+                if(!clearStart(mod))return;
                 notice(mod, "native session extension refused (" + result + "); stock startup retained");
                 return;
             }
+            withdrawal.setPending(false);
             lastStart = msg;
             notice(mod, "armed 0x4300/0x4301 (" + msg.length + " bytes; contents not logged)");
         } catch (Throwable failure) {
-            try { clearStart(); } catch (Throwable ignored) { lastStart = null; }
+            if(!clearStart(mod))return;
             notice(mod, "extension unavailable (" + failure.getClass().getSimpleName() + "); stock startup retained");
         }
     }
@@ -211,7 +230,7 @@ final class IdentityInstaller {
                 catch (Throwable error) { mod.log("CarPlayStart: watcher stopped (" + error.getClass().getSimpleName() + ")"); }
                 finally {
                     synchronized (IdentityInstaller.class) {
-                        try { clearStart(); } catch (Throwable ignored) {}
+                        clearStart(mod);
                         watcherStarted = false;
                     }
                 }

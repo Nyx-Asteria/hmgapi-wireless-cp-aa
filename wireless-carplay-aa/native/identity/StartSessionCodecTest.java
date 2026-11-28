@@ -15,6 +15,13 @@ public final class StartSessionCodecTest {
         check(((themed[2]&255)<<8|(themed[3]&255))==themed.length&&h.substring(8,12).equals("4301"),"header");
         check(h.endsWith("001b0007000f0000343443394641333145430000080001000003d9"),"theme parameter");
         check(h.contains("0009000631392e3000"),"SDK parameter");
+        byte[] unknownChannel=StartSessionCodec.encode("S","p",-1,Arrays.asList("192.168.0.1"),-1,7000,"dev","key","1",null,null,0);
+        byte[] measuredChannel=StartSessionCodec.encode("S","p",36,Arrays.asList("192.168.0.1"),-1,7000,"dev","key","1",null,null,0);
+        check(measuredChannel.length==unknownChannel.length+5,"unknown channel omitted");
+        try {
+            StartSessionCodec.encode("S","p",256,Arrays.asList("192.168.0.1"),-1,7000,"dev","key","1",null,null,0);
+            throw new AssertionError("out-of-range channel accepted");
+        }catch(IllegalArgumentException expected){}
         IdentityRegistry r=new IdentityRegistry();
         r.registerTheme("fixture",theme);
         check(!r.themeSessionStart(),"old caller identification only");
