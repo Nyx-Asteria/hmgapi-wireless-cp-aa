@@ -5,6 +5,15 @@ void *dlsym(void *h,const char *s){(void)h;(void)s;return 0;}
 void *memcpy(void *d,const void *s,u32 n){char *a=d;const char *b=s;while(n--)*a++=*b++;return d;}
 void *__aeabi_memcpy(void *d,const void *s,u32 n){char *a=d;const char *b=s;while(n--)*a++=*b++;return d;}
 void *__aeabi_memcpy4(void *d,const void *s,u32 n){return __aeabi_memcpy(d,s,n);}
+/* Freestanding fixture only: compiler-generated aggregate initialization.
+ * No libc is linked into the QEMU test image. */
+void *memset(void *d,int v,u32 n){unsigned char *a=d;while(n--)*a++=(unsigned char)v;return d;}
+void __aeabi_memset(void *d,u32 n,int v){memset(d,v,n);}
+void __aeabi_memset4(void *d,u32 n,int v){memset(d,v,n);}
+void __aeabi_memset8(void *d,u32 n,int v){memset(d,v,n);}
+void __aeabi_memclr(void *d,u32 n){memset(d,0,n);}
+void __aeabi_memclr4(void *d,u32 n){memset(d,0,n);}
+void __aeabi_memclr8(void *d,u32 n){memset(d,0,n);}
 
 char output[6][1024];
 int result;
