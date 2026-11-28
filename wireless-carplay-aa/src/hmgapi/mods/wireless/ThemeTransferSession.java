@@ -37,7 +37,11 @@ final class ThemeTransferSession implements Closeable {
     static final class Captured {
         final Header header;
         final File archive;
-        Captured(Header header,File archive){this.header=header;this.archive=archive;}
+        final long size;
+        final String checksum;
+        Captured(Header header,File archive,long size,String checksum){
+            this.header=header;this.archive=archive;this.size=size;this.checksum=checksum;
+        }
     }
     ThemeTransferSession(File directory,long byteLimit){
         this.directory=directory;this.byteLimit=byteLimit;
@@ -81,7 +85,7 @@ final class ThemeTransferSession implements Closeable {
             if(message.containsKey("checksum") && !(checksum instanceof String))throw new IOException("invalid checksum type");
             File result=capture.append(index,((byte[])raw).clone(),(String)checksum);
             if(result==null)return null;
-            Captured complete=new Captured(header,result);
+            Captured complete=new Captured(header,result,result.length(),(String)checksum);
             close();
             return complete;
         }catch(IOException failure){
