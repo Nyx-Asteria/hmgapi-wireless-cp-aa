@@ -1,3 +1,7 @@
+# RC8 native assertion diagnostic
+
+Parent a5d70a7345b5c0460155617a1515fc3f575981ae: CI 46107142347 failed in the ARM emulator after successful linker repair, Java identity/codec tests and recipe-gate equivalence; production mod/package and pin jobs passed. First three printed serialized vectors match their expected text, but the former harness collapses all assertion and remaining vector failures into one generic message. This commit reports exact failing assertion line numbers and expected/actual values for every mismatching vector, preserving all assertions. No production changes and no test bypass. 73 assertion sites instrumented. Fresh CI/release required before signing; permanent-key artifact not yet available. Local sandbox has no QEMU or GitHub network access; diagnosis relies on actual CI output.
+
 # RC8 harness duplicate helper repair
 
 Parent 1444f541685eb330530478b772c2077e2838109e: CI 46106906316 failed at ARM harness compilation because identity.c already defines __aeabi_memclr. Production mod/package and Java wire-vector tests passed. Remove only duplicate fixture definition; retain other helpers and test assertions. Release 46106906304 has failed journal gate; no verified signed artifact for latest runtime. New release-trigger commit requires fresh CI and permanent signing; HTTP 403 publication fallback remains in place. No production changes.

@@ -18,6 +18,15 @@ void __aeabi_memclr8(void *d,u32 n){memset(d,0,n);}
 char output[6][1024];
 int result;
 static u32 at,value=42,mailbox,slot;
+static void semihost(u32 operation,const void *argument);
+static void fixture_failure(unsigned line){
+    char msg[]="FAIL assertion at harness line 00000\n";
+    for(int i=34;i>=30;i--){msg[i]=(char)('0'+line%10);line/=10;}
+    semihost(4,msg);
+    result|=1;
+}
+#define FAIL_CHECK() fixture_failure(__LINE__)
+
 static Param root[24],stock_info[5],stock_status[13],stock_wireless[WIRELESS_MAX+1];
 static u16 stock_wireless_count=2;
 static void put(const char *s){while(*s && at<sizeof(output[0])-1)output[slot][at++]=*s++;output[slot][at]=0;}
@@ -121,9 +130,9 @@ static u32 capability_build(u32 h,u32 s,u32 a,u32 b,u32 cmd,void *table,u32 coun
         Blob callback=(Blob)p[i].length;
         unsigned char bytes[8]={0};
         int n=callback(0,0,p[i].id,0,0);
-        if(n!=(p[i].id==6?4:6)){result|=1;return 0;}
-        if(!fixture_builder_sizing_only && callback(bytes,n,p[i].id,0,0)!=n){result|=1;return 0;}
-        if(!fixture_builder_sizing_only && (bytes[n-2]!=0x43 || bytes[n-1]!=(p[i].id==6?1:0)))result|=1;
+        if(n!=(p[i].id==6?4:6)){FAIL_CHECK();return 0;}
+        if(!fixture_builder_sizing_only && callback(bytes,n,p[i].id,0,0)!=n){FAIL_CHECK();return 0;}
+        if(!fixture_builder_sizing_only && (bytes[n-2]!=0x43 || bytes[n-1]!=(p[i].id==6?1:0)))FAIL_CHECK();
     }
     return fixture_builder_success;
 }
@@ -143,13 +152,13 @@ int test_main(void){
     lock_mutex=mutex;unlock_mutex=mutex;protect_page=protect;hook_mailbox=&mailbox;
     result=configure("Kia EV6",7,2,0,235000,2,10900,"",0,0);slot=0;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
-    if(!identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)!=5)result|=1;
+    if(!identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)!=5)FAIL_CHECK();
     result|=configure("Kia EV6",7,2,0,235000,2,10900,"THEME1:985:19.0",15,0);slot=1;
-    if(identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0))result|=1;
+    if(identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0))FAIL_CHECK();
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
-    if(!identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)!=7)result|=1;
+    if(!identity_built || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)!=7)FAIL_CHECK();
     result|=configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,0);slot=2;
-    if(identity_built)result|=1;
+    if(identity_built)FAIL_CHECK();
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     result|=configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=3;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
@@ -157,13 +166,13 @@ int test_main(void){
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
     result|=configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1);slot=5;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
-    if(configure("Kia K5",6,0,0,235000,2,10900,"",0,0)!=-12)result|=1;
+    if(configure("Kia K5",6,0,0,235000,2,10900,"",0,0)!=-12)FAIL_CHECK();
     // Vehicle readiness requires actual engine and name lookup, not table selection.
     identity_seen=0;
     u16 vehicle_count=0;int vehicle_more=0;
-    if(identity_children(20,13,&vehicle_count,0,&vehicle_more)!=info_copy || identity_seen)result|=1;
-    if(info_value(2,8,&vehicle_count,0,&vehicle_more)!=&engine || identity_seen!=1)result|=1;
-    if(info_value(6,10,&vehicle_count,0,&vehicle_more)!=display_name || identity_seen!=5)result|=1;
+    if(identity_children(20,13,&vehicle_count,0,&vehicle_more)!=info_copy || identity_seen)FAIL_CHECK();
+    if(info_value(2,8,&vehicle_count,0,&vehicle_more)!=&engine || identity_seen!=1)FAIL_CHECK();
+    if(info_value(6,10,&vehicle_count,0,&vehicle_more)!=display_name || identity_seen!=5)FAIL_CHECK();
     // Exercise OEM tables that already contain theme IDs; preserve other
     // entries, replace only those owned by the selected format.
     stock_wireless[2]=parameter(5,12);stock_wireless[3]=parameter(6,10);
@@ -172,52 +181,52 @@ int test_main(void){
     const Param *children=identity_children(24,13,&child_count,0,&more);
     if(child_count!=4 || children[0].id!=0 || children[1].id!=1
        || children[2].id!=5 || children[2].type!=12
-       || children[3].id!=6 || children[3].type!=10)result|=1;
+       || children[3].id!=6 || children[3].type!=10)FAIL_CHECK();
     legacy_theme=0;
     stock_wireless[2]=parameter(5,8);
     children=identity_children(24,13,&child_count,0,&more);
     if(child_count!=4 || children[2].id!=5 || children[2].type!=8
-       || children[3].id!=6 || children[3].type!=10)result|=1;
+       || children[3].id!=6 || children[3].type!=10)FAIL_CHECK();
     legacy_theme=1;
     // A child list alone is not evidence that the theme value was consumed.
     identity_seen=0;
     children=identity_children(24,13,&child_count,0,&more);
-    if(!theme_children_active || (identity_seen&2))result|=1;
-    if(wireless_value(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))result|=1;
+    if(!theme_children_active || (identity_seen&2))FAIL_CHECK();
+    if(wireless_value(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))FAIL_CHECK();
     // Unsupported stock table size must retain stock values, not inject
     // the configured theme through the lookup wrapper.
     identity_seen=0;stock_wireless_count=WIRELESS_MAX+1;
     children=identity_children(24,13,&child_count,0,&more);
     if(children!=stock_wireless || child_count!=WIRELESS_MAX+1 || theme_children_active
-       || wireless_value(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
+       || wireless_value(6,10,&child_count,0,&more)!=&value || (identity_seen&2))FAIL_CHECK();
     // Preserve the actual OEM root callback and metadata on fallback.
     build_lookup=alternate_root;
     more=0;
     Lookup early=(Lookup)identity_value(24,13,&child_count,0,&more);
-    if(early!=wireless_value || more!=3)result|=1;
-    if(early(6,10,&child_count,0,&more)!=&value || more!=7 || (identity_seen&2))result|=1;
+    if(early!=wireless_value || more!=3)FAIL_CHECK();
+    if(early(6,10,&child_count,0,&more)!=&value || more!=7 || (identity_seen&2))FAIL_CHECK();
     stock_wireless_count=4;
     children=identity_children(24,13,&child_count,0,&more);
-    if(!children || early(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))result|=1;
-    if(early(0,5,&child_count,0,&more)!=&value || more!=7)result|=1;
+    if(!children || early(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))FAIL_CHECK();
+    if(early(0,5,&child_count,0,&more)!=&value || more!=7)FAIL_CHECK();
     stock_wireless_count=WIRELESS_MAX+1;
     identity_seen=0;
     children=identity_children(24,13,&child_count,0,&more);
-    if(children!=stock_wireless || early(6,10,&child_count,0,&more)!=&value || (identity_seen&2))result|=1;
+    if(children!=stock_wireless || early(6,10,&child_count,0,&more)!=&value || (identity_seen&2))FAIL_CHECK();
     build_lookup=0;stock_wireless_lookup=0;
     stock_wireless_count=2;
     /* RC8 default path: fixed callback and legacy append, even with an
        OEM root callback that would have returned different metadata. */
     rc7_mode=0;build_lookup=alternate_root;identity_seen=0;more=99;
     Lookup legacy=(Lookup)identity_value(24,13,&child_count,0,&more);
-    if(legacy!=wireless_value || more!=0)result|=1;
+    if(legacy!=wireless_value || more!=0)FAIL_CHECK();
     children=identity_children(24,13,&child_count,0,&more);
     if(child_count!=4 || children[2].id!=5 || children[3].id!=6
-       || legacy(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))result|=1;
-    if(legacy(1,10,&child_count,0,&more)!=wireless_name || more!=0)result|=1;
+       || legacy(6,10,&child_count,0,&more)!=theme || !(identity_seen&2))FAIL_CHECK();
+    if(legacy(1,10,&child_count,0,&more)!=wireless_name || more!=0)FAIL_CHECK();
     stock_wireless_count=4;
     children=identity_children(24,13,&child_count,0,&more);
-    if(child_count!=6 || children[4].id!=5 || children[5].id!=6)result|=1;
+    if(child_count!=6 || children[4].id!=5 || children[5].id!=6)FAIL_CHECK();
     stock_wireless_count=2;build_lookup=0;rc7_mode=7;
     // Native tuple parser mirrors the Java API, including uint32 bounds.
     if(!theme_tuple_ok("THEME1:985:19.0",15)
@@ -229,39 +238,39 @@ int test_main(void){
        || theme_tuple_ok(":1:1",4)
        || theme_tuple_ok("A:1:",4)
        || theme_tuple_ok("A.B:1:1",7)
-       || theme_tuple_ok("A:1:1:2",7))result|=1;
+       || theme_tuple_ok("A:1:1:2",7))FAIL_CHECK();
     // Preserve OEM capability IDs; append only while a response is armed.
     unsigned char capabilities[8]={0};
     start_len=6;start_capability_seen=0;
-    if(start_append(fixture_blob,0,0,0,0,0,1)!=4 || start_capability_seen)result|=1;
-    if(start_append(fixture_blob,0,0,0,0,0,0)!=6 || start_capability_seen)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=4 || start_capability_seen)FAIL_CHECK();
+    if(start_append(fixture_blob,0,0,0,0,0,0)!=6 || start_capability_seen)FAIL_CHECK();
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=4
-       || capabilities[0]!=0x1d || capabilities[1]!=1 || capabilities[2]!=0x43 || capabilities[3]!=1 || start_capability_seen!=1)result|=1;
+       || capabilities[0]!=0x1d || capabilities[1]!=1 || capabilities[2]!=0x43 || capabilities[3]!=1 || start_capability_seen!=1)FAIL_CHECK();
     if(start_append(fixture_blob,capabilities,8,0,0,0,0)!=6
-       || capabilities[4]!=0x43 || capabilities[5]!=0 || start_capability_seen!=3)result|=1;
-    if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)result|=1;
+       || capabilities[4]!=0x43 || capabilities[5]!=0 || start_capability_seen!=3)FAIL_CHECK();
+    if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)FAIL_CHECK();
     fixture_blob_size=3;
     if(start_append(fixture_blob,0,0,0,0,0,1)!=3
-       || start_append(fixture_blob,capabilities,8,0,0,0,1)!=3)result|=1;
+       || start_append(fixture_blob,capabilities,8,0,0,0,1)!=3)FAIL_CHECK();
     fixture_blob_size=-1;
-    if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=-1)result|=1;
-    if(start_append(fixture_blob_unstable,0,0,0,0,0,0)!=4)result|=1;
+    if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=-1)FAIL_CHECK();
+    if(start_append(fixture_blob_unstable,0,0,0,0,0,0)!=4)FAIL_CHECK();
     fixture_blob_size=1026;
-    if(start_append(fixture_blob,0,0,0,0,0,0)!=1026)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,0)!=1026)FAIL_CHECK();
     fixture_blob_size=2147483647;
-    if(start_append(fixture_blob,0,0,0,0,0,1)!=2147483647)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=2147483647)FAIL_CHECK();
     fixture_blob_size=4;__atomic_store_n(&start_capability_built,3,__ATOMIC_RELEASE);
-    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=3)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=3)FAIL_CHECK();
     start_clear_locked();
-    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=0)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,9)!=0)FAIL_CHECK();
     if(start_append(fixture_blob,0,0,0,0,0,0)!=4
-       || start_append(fixture_blob,capabilities,8,0,0,0,0)!=4)result|=1;
+       || start_append(fixture_blob,capabilities,8,0,0,0,0)!=4)FAIL_CHECK();
     /* RC8 default: RC6 sizing/append semantics with bounds and evidence. */
     rc7_mode=0;start_len=6;start_capability_seen=0;
-    if(start_append(fixture_blob,0,0,0,0,0,1)!=6 || start_capability_seen)result|=1;
+    if(start_append(fixture_blob,0,0,0,0,0,1)!=6 || start_capability_seen)FAIL_CHECK();
     if(start_append(fixture_blob,capabilities,8,0,0,0,1)!=6
-       || capabilities[4]!=0x43 || capabilities[5]!=1 || start_capability_seen!=1)result|=1;
-    if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)result|=1;
+       || capabilities[4]!=0x43 || capabilities[5]!=1 || start_capability_seen!=1)FAIL_CHECK();
+    if(start_append(fixture_blob,capabilities,4,0,0,0,0)!=4)FAIL_CHECK();
     start_clear_locked();rc7_mode=7;
     /* Framing of top-level and nested codec parameters. */
     static const unsigned char framed[]={0,9,0,1,0,5,0,0,'S',0,4,0,99};
@@ -276,63 +285,63 @@ int test_main(void){
        || start_params_ok(zero_size,sizeof(zero_size),1)
        || start_params_ok(overrun,sizeof(overrun),1)
        || start_params_ok(nested_overrun,sizeof(nested_overrun),1)
-       || start_params_ok(nested_tail,sizeof(nested_tail),1))result|=1;
+       || start_params_ok(nested_tail,sizeof(nested_tail),1))FAIL_CHECK();
     static const unsigned char bad_frame[]={0x40,0x40,0,10,0x43,1,0,5,0,2};
     start_len=6;start_msg[0]=0x55;
-    if(start_configure(bad_frame,sizeof(bad_frame))!=-12 || start_len || start_msg[0])result|=1;
+    if(start_configure(bad_frame,sizeof(bad_frame))!=-12 || start_len || start_msg[0])FAIL_CHECK();
     /* Rejecting malformed replacements must erase the old native payload. */
     static const unsigned char invalid[]={0x40,0x40,0,6,0x43,0};
     start_len=6;for(u32 i=0;i<6;i++)start_msg[i]=0x55;
-    if(start_configure(invalid,sizeof(invalid))!=-12 || start_len)result|=1;
-    for(u32 i=0;i<START_MAX;i++)if(start_msg[i])result|=1;
+    if(start_configure(invalid,sizeof(invalid))!=-12 || start_len)FAIL_CHECK();
+    for(u32 i=0;i<START_MAX;i++)if(start_msg[i])FAIL_CHECK();
     start_len=6;start_msg[0]=0x55;
-    if(start_configure(0,6)!=-12 || start_len || start_msg[0])result|=1;
+    if(start_configure(0,6)!=-12 || start_len || start_msg[0])FAIL_CHECK();
     start_len=6;start_msg[0]=0x55;
-    if(start_configure(0,0)!=0 || start_len || start_msg[0])result|=1;
+    if(start_configure(0,0)!=0 || start_len || start_msg[0])FAIL_CHECK();
     /* JNI null input takes the invalidation path without touching JNIEnv. */
     start_len=6;start_msg[0]=0x55;
-    if(Java_hmgapi_mods_wireless_NativeIdentity_startSession(0,0,0)!=-12 || start_len || start_msg[0])result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_startSession(0,0,0)!=-12 || start_len || start_msg[0])FAIL_CHECK();
     start_len=6;start_msg[0]=0x55;
-    if(start_configure(0,START_MAX+1)!=-12 || start_len || start_msg[0])result|=1;
+    if(start_configure(0,START_MAX+1)!=-12 || start_len || start_msg[0])FAIL_CHECK();
     // Invalidation during packet creation must suppress the obsolete response.
     packet_create=fixture_create;packet_destroy=fixture_destroy;session_malloc=fixture_malloc;
     start_len=6;start_msg[0]=0x40;
     u32 before=start_sends;
     start_notify(1,2,0,0);
-    if(fixture_destroyed!=1 || fixture_malloc_calls || start_sends!=before || start_last!=-4 || start_stale!=1)result|=1;
+    if(fixture_destroyed!=1 || fixture_malloc_calls || start_sends!=before || start_last!=-4 || start_stale!=1)FAIL_CHECK();
     start_notify(1,2,0,0);
-    if(start_no_payload!=1 || start_sends!=before || start_last!=-1)result|=1;
+    if(start_no_payload!=1 || start_sends!=before || start_last!=-1)FAIL_CHECK();
     // Withdrawal during payload allocation must destroy the populated packet,
     // without copying the obsolete payload or calling the OEM send routine.
     packet_create=fixture_create_plain;session_malloc=fixture_malloc_withdraw;send_packet=fixture_send;
     start_len=6;start_msg[0]=0x40;fixture_payload[0]=0x55;
     start_notify(1,2,0,0);
     if(fixture_destroyed!=2 || fixture_payload_destroyed!=1 || fixture_sent
-       || start_sends!=before || start_stale!=2 || start_last!=-4 || fixture_payload[0]!=0x55)result|=1;
+       || start_sends!=before || start_stale!=2 || start_last!=-4 || fixture_payload[0]!=0x55)FAIL_CHECK();
     // Zero means dispatch refusal: caller still owns the packet.
     session_malloc=fixture_malloc_plain;fixture_send_result=0;
     start_len=6;start_msg[0]=0x40;
     start_notify(1,2,0,0);
     if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=1
-       || start_sends!=before+1 || start_last!=0 || fixture_payload[0]!=0x40)result|=1;
+       || start_sends!=before+1 || start_last!=0 || fixture_payload[0]!=0x40)FAIL_CHECK();
     // Nonzero means the OEM callback took the packet; do not destroy it.
     fixture_send_result=1;
     start_notify(1,2,0,0);
     if(fixture_destroyed!=3 || fixture_payload_destroyed!=2 || fixture_sent!=2
-       || start_sends!=before+2 || start_last!=1)result|=1;
+       || start_sends!=before+2 || start_last!=1)FAIL_CHECK();
     if(Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,7)!=1
-       || Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,8)!=1)result|=1;
+       || Java_hmgapi_mods_wireless_NativeIdentity_startSessionStatus(0,0,8)!=1)FAIL_CHECK();
     // Theme-only and gasoline contributions do not require EV status support.
     info_table=0;status_table=0;
-    if(configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || !has_theme || has_vehicle)result|=1;
-    if(configure("Kia K5",6,0,-1,0,-1,0,"",0,0)!=-23)result|=1;
+    if(configure("",0,-1,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || !has_theme || has_vehicle)FAIL_CHECK();
+    if(configure("Kia K5",6,0,-1,0,-1,0,"",0,0)!=-23)FAIL_CHECK();
     info_table=stock_info;
-    if(configure("Kia EV6",7,2,0,235000,2,10900,"",0,0)!=-24)result|=1;
-    if(configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || has_ev)result|=1;
+    if(configure("Kia EV6",7,2,0,235000,2,10900,"",0,0)!=-24)FAIL_CHECK();
+    if(configure("Kia K5",6,0,-1,0,-1,0,"THEME1:985:19.0",15,1)!=0 || has_ev)FAIL_CHECK();
     status_table=stock_status;
     // A busy or failed identity lock cannot prevent stock identification.
     raw_builder=fallback_build;lock_mutex=mutex_fail;
-    if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)result|=1;
+    if(identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values)!=23 || fixture_fallback_calls!=1)FAIL_CHECK();
     raw_builder=build;lock_mutex=mutex;
     // Ambiguous capability tables must not arm the optional session handler.
     static StartHandler fixture_handlers[34];
@@ -342,24 +351,24 @@ int test_main(void){
     root[3]=parameter(6,12);root[3].length=(u32)fixture_blob;
     root[4]=parameter(7,12);root[4].length=(u32)fixture_blob;
     root[5]=root[3];
-    if(start_configure(valid_empty,sizeof(valid_empty))!=-20 || start_len || fixture_handlers[33].id!=0x5202)result|=1;
+    if(start_configure(valid_empty,sizeof(valid_empty))!=-20 || start_len || fixture_handlers[33].id!=0x5202)FAIL_CHECK();
     root[5]=root[4];
-    if(start_configure(valid_empty,sizeof(valid_empty))!=-20 || start_len || fixture_handlers[33].id!=0x5202)result|=1;
+    if(start_configure(valid_empty,sizeof(valid_empty))!=-20 || start_len || fixture_handlers[33].id!=0x5202)FAIL_CHECK();
     root[5]=(Param){0};
-    if(start_configure(valid_empty,sizeof(valid_empty))!=0 || start_len!=6 || fixture_handlers[33].id!=AVAILABILITY)result|=1;
+    if(start_configure(valid_empty,sizeof(valid_empty))!=0 || start_len!=6 || fixture_handlers[33].id!=AVAILABILITY)FAIL_CHECK();
     start_clear_locked();
     // Exercise both wrapped callbacks through a real matching builder.
     root[3]=parameter(6,12);root[3].length=(u32)fixture_blob;
     root[4]=parameter(7,12);root[4].length=(u32)fixture_blob;
     raw_builder=capability_build;start_len=6;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
-    if(start_capability_built!=3)result|=1;
+    if(start_capability_built!=3)FAIL_CHECK();
     fixture_builder_success=0;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
-    if(start_capability_built)result|=1;
+    if(start_capability_built)FAIL_CHECK();
     fixture_builder_success=1;fixture_builder_sizing_only=1;
     identity_builder(0,0,0,0,0x1d01,root,24,"identity",root_values);
-    if(start_capability_built)result|=1;
+    if(start_capability_built)FAIL_CHECK();
     root[3].used=root[4].used=0;root[3].length=root[4].length=0;
     raw_builder=build;
     // Coherent JNI snapshot includes the actual native payload state.
@@ -367,21 +376,21 @@ int test_main(void){
     __atomic_store_n(&identity_evidence,7,__ATOMIC_RELEASE);
     __atomic_store_n(&start_capability_built,3,__ATOMIC_RELEASE);
     __atomic_store_n(&identity_built,1,__ATOMIC_RELEASE);
-    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=127)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=127)FAIL_CHECK();
     start_clear_locked();
-    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=71)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=71)FAIL_CHECK();
     lock_mutex=mutex_fail;
-    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=-1)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0)!=-1)FAIL_CHECK();
     lock_mutex=mutex;
     // Shutdown must report native failures and be safe to retry.
     lock_mutex=mutex_fail;
-    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-15 || configured || identity_built)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-15 || configured || identity_built)FAIL_CHECK();
     lock_mutex=mutex;protect_fail=1;
-    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-19 || start_len)result|=1;
+    if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=-19 || start_len)FAIL_CHECK();
     protect_fail=0;
     if(Java_hmgapi_mods_wireless_NativeIdentity_shutdown(0,0)!=0 || mailbox || start_len
        || Java_hmgapi_mods_wireless_NativeIdentity_identityEvidence(0,0)
-       || Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0))result|=1;
+       || Java_hmgapi_mods_wireless_NativeIdentity_negotiationEvidence(0,0))FAIL_CHECK();
     return 0;
 }
 static const char expected_vehicle[]="[20:20.0=42;20.1=42;20.2=2;20.6=Kia EV6;20.8=Kia EV6;20.11=0;20.11=2;20.12=235000;20.14=10900;][21:21.3=42;21.6=42;21.11=42;21.21=;21.30=;][24:24.0=42;24.1=stock;]";
@@ -399,8 +408,13 @@ static void semihost(u32 operation,const void *argument){
     __asm__ volatile("svc 0x123456"::"r"(r0),"r"(r1):"memory");
 }
 void run(void){
-    semihost(4,start);test_main();int ok=result==0 && same(output[0],expected_vehicle) && same(output[1],expected_both) && same(output[2],expected_theme) && same(output[3],expected_legacy) && same(output[4],expected_gas) && same(output[5],expected_gas_theme);
-    if(!ok){semihost(4,output[0]);semihost(4,"\n");semihost(4,output[1]);semihost(4,"\n");semihost(4,output[2]);semihost(4,"\n");}
+    semihost(4,start);test_main();
+    const char *expected[]={expected_vehicle,expected_both,expected_theme,expected_legacy,expected_gas,expected_gas_theme};
+    for(unsigned i=0;i<6;i++)if(!same(output[i],expected[i])){
+        char label[]="FAIL serialized vector 0\n";label[23]=(char)('0'+i);
+        semihost(4,label);semihost(4,"expected: ");semihost(4,expected[i]);semihost(4,"\nactual: ");semihost(4,output[i]);semihost(4,"\n");FAIL_CHECK();
+    }
+    int ok=result==0;
     semihost(4,ok?pass:fail);
     u32 status[2]={0x20026,ok?0:1};semihost(0x20,status);for(;;){}
 }
