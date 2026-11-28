@@ -1,3 +1,7 @@
+# RC9 projection teardown attachment recovery
+
+Verified parent 16d790de4047eedf8e376c0b9ae710201360a60d full CI passed 46176606513 including ARM combined initialization fixtures. On wireless projection finalization invalidate stale Bluetooth attachment state before existing detach and SPP-present recovery. This removes the stale sSession gate without adding new Bluetooth connection attempts or interpreting undocumented finalization types. Existing USB and address checks remain. Fresh CI required; actual inactivity causality and user-disconnect behavior require vehicle verification. Publication held pending new logs. No companion edits.
+
 # RC9 ARM harness assembly correction
 
 CI 46171450188 failed at harness line 452 with out-of-range PC-relative fixup in naked entry point. Replace literal-pool stack initialization with ARM immediate MOV (0x01000000 is encodable). No production change. Amend fixture commit; fresh CI required. Publication explicitly held until new vehicle logs reviewed.

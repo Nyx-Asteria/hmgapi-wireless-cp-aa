@@ -373,6 +373,13 @@ final class Bridge {
                 sCpClient = false;
                 resetReceive();
             }
+            if (client || wireless) {
+                // The old Bluetooth attachment belongs to the ended projection.
+                // Invalidate queued attach work before scheduling the existing
+                // SPP-present recovery; do not initiate a new Bluetooth connection.
+                invalidateBtAttach();
+                log("CarPlay teardown: Bluetooth attachment invalidated");
+            }
             if (client) sendDetach();
             if (client || wireless) onUsbGone();
         } catch (Throwable t) {
