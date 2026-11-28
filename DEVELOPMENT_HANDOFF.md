@@ -1,3 +1,7 @@
+## 3.x K5-only vehicle test focus
+
+Owner requested that WCP 3.x stop defaulting to Ioniq 6/EV6 integration. Default test.sh now selects K5 DL322 US 260507 and private K5 stock; new tools/k5 integration uses DL322/DL3 US selectors mapped to kmc, real SDK engine, existing hotspot/firewall checks, refusal of unsupported K5 firmware and restoration. KMC has no CEEV featurexml hash set; do not invent or override fingerprints. CEEV integration remains manually callable; CEEV-specific AA recipe tests are opt-in. Keep generic identity protocol vectors (including EV contributions), logging, and safety regressions. This is test scope only: do not narrow the actual manifest or remove runtime compatibility without separate direction. Synthetic product/onebin strings are not verified complete OEM properties. Exact K5 stock check and new CI not yet run. RC8 recovery branch untouched; 3.0.0 still based on RC7; integrate recovery once vehicle evidence supports it.
+
 # WCP — 3.0.0 development handoff
 
 Updated 2026-11-27. Active development branch: `3.0.0`. Frozen preceding candidate: `rc7-final` at `973c14ec3a2d169adda665a8ee65b3f347e6e20a`.

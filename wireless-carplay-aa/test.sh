@@ -1,6 +1,6 @@
 #!/bin/sh
 # Off-car test of the Wireless mod on the patch engine, against a car's real
-# stock files (kept privately: STOCK, default ~/hmg-private/stock/ev6 with app/,
+# stock files (kept privately: STOCK, default ~/hmg-private/stock/k5 with app/,
 # lib/, onebin/, permissions/). Every part on: each rebuilt file must match the
 # set's expect list (the engine checks), props go live, nothing touches
 # build.prop; restore must give back every stock byte.
@@ -8,9 +8,9 @@
 #   HMGAPI_SDK=<sdk> wireless-carplay-aa/test.sh [stock dir] [product] [onebin]
 set -e
 M=$(cd "$(dirname "$0")" && pwd)
-S=${1:-$HOME/hmg-private/stock/ev6}
-export HMGAPI_PRODUCT=${2:-CVEV.USA.0000.V015.012.260507}
-export HMGAPI_ONEBIN=${3:-cvev_us}
+S=${1:-${K5_STOCK:-$HOME/hmg-private/stock/k5}}
+export HMGAPI_PRODUCT=${2:-DL322.USA.0000.V015.012.260507}
+export HMGAPI_ONEBIN=${3:-dl322_us}
 PRODUCT=$HMGAPI_PRODUCT ONEBIN=$HMGAPI_ONEBIN
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 R=$T/root
@@ -19,8 +19,9 @@ R=$T/root
 d=$(HMGAPI_NEMESIS_CONFLICTS=/dev/null python3 "$HMGAPI_SDK/bin/nemesis-meta.py" depends hmgapi.wireless-carplay-aa 'hmgapi@>=1.0' --mod "$M/mod.json")
 if [ "$d" = "hmgapi@>=1.0,!wireless.projection,!projection.tbt,!enhanced.projection" ]; then echo "ok    NEMESIS package refuses wireless.projection, projection.tbt and enhanced.projection"
 else echo "FAIL  NEMESIS package depends: [$d]"; exit 1; fi
-python3 "$M/tools/ioniq6/integration.py"
-[ -d "$S/app" ] || { echo "no stock tree at $S (skipped)"; exit 0; }
+python3 "$M/tools/k5/integration.py"
+[ -d "$S/app" ] || { echo "no private K5 stock tree at $S (skipped; synthetic K5 suite ran)"; exit 0; }
+case "$PRODUCT" in DL322.USA.*.260507|DL3.USA.*.260507) ;; *) echo "K5 test requires US DL322/DL3 firmware 260507" >&2; exit 1 ;; esac
 
 mkdir -p $R/system/app $R/system/lib $R/system/etc/permissions $R/system/onebin/$ONEBIN $R/sys/bus/sdio/devices/mmc1:0001:1 $R/data/hmgapi/mods $R/data/hmgapi/settings
 cp $S/app/* $R/system/app/; cp $S/lib/* $R/system/lib/

@@ -2,6 +2,10 @@
 # Public structural check; private-stock integration is explicitly opt-in.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ "${WCP_LEGACY_CEEV_TESTS:-0}" != 1 ] && [ -z "${CEEV_STOCK_LIBRARY:-}" ]; then
+    echo "CEEV recipe tests are archival/opt-in on K5-focused 3.x (set WCP_LEGACY_CEEV_TESTS=1)"
+    exit 0
+fi
 python3 "$HERE/check.py"
 if [ -z "${CEEV_STOCK_LIBRARY:-}" ]; then
     echo 'CEEV private-stock ARM and MemRecipe checks skipped (set CEEV_STOCK_LIBRARY)'
