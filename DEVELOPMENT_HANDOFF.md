@@ -1,3 +1,9 @@
+# RC9 staged recovery roadmap and transport policy fixtures
+
+Parent 5dee422ac4042e89685fc7aff304c034d5c92c6b and preceding teardown commit fully green (46178735235, 46178639220). Extract existing delayed SPP admission predicate and exercise nine cases in existing host harness. Both pre-query and post-query checks use the same predicate. Fresh CI required; tests cover policy, not Android callback scheduling.
+
+Stages: 1 identity/StartSession implementation green; 2 transport lifecycle recovery (current); 3 regression expansion; 4 native evidence/diagnostic audit; 5 CPU RC12 API v3 compatibility; 6 signed private vehicle-test artifact and checklist; 7 vehicle logs and validation; 8 corrections/publication. Public release held pending vehicle logs. No companion changes.
+
 # RC9 delayed SPP recovery fencing
 
 Fence existing SPP-present recovery with Bluetooth attachment generation, address, enabled state, USB exclusion and active projection checks, including revalidation after the Binder query. No new connection attempts. Parent CI 46178639220 in progress at inspection. Fresh CI and targeted lifecycle fixture outstanding. Publication held until new vehicle logs reviewed; no companion edits.

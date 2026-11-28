@@ -264,8 +264,8 @@ final class Bridge {
     }
 
     static synchronized void recoverExistingSpp(String addr, int generation) {
-        if (btGeneration.get() != generation || !addr.equals(sAddr)
-                || sUsb || sSession || sCpClient || sCpWireless || !enabled()) return;
+        if (!AttachGeneration.recoverable(generation, btGeneration.get(), addr, sAddr,
+                sUsb, sSession, sCpClient, sCpWireless, enabled())) return;
         onSppUp(addr);
     }
 
@@ -278,8 +278,8 @@ final class Bridge {
             public void run() {
                 try {
                     HfDeviceBTCMManager m = sBtcm;
-                    if (btGeneration.get() != generation || sUsb || sSession
-                            || sCpClient || sCpWireless || !enabled() || !addr.equals(sAddr)) return;
+                    if (!AttachGeneration.recoverable(generation, btGeneration.get(), addr, sAddr,
+                            sUsb, sSession, sCpClient, sCpWireless, enabled())) return;
                     if (m != null && m.IbtcmIsSppConnectedDevice(addr)) recoverExistingSpp(addr, generation);
                 } catch (Throwable t) {
                     error("onUsbGone", t);
