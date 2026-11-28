@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * Decoded CarPlayUpdateData dictionary adapter; one archive per instance.
- * No OPACK decoder, transport, acknowledgement, installation or runtime caller.
+ * Bounded OPACK adapter; no transport, acknowledgement, installation or runtime caller.
  * Limits are local policy, not inferred Apple wire limits. Metadata stays
  * untrusted; the digest only establishes consistency with the sender's checksum.
  */
@@ -41,6 +41,20 @@ final class ThemeTransferSession implements Closeable {
     }
     ThemeTransferSession(File directory,long byteLimit){
         this.directory=directory;this.byteLimit=byteLimit;
+    }
+
+    /** Accept a single complete, already authenticated application body.
+     * This method does not authenticate or frame the transport itself.
+     * Malformed OPACK is fatal to this capture, just like a malformed dictionary.
+     */
+    synchronized Captured receiveEncoded(byte[] body) throws IOException {
+        if(closed)throw new IOException("transfer closed");
+        try {
+            return receive(ThemeOpack.decode(body));
+        } catch(IOException failure) {
+            try{close();}catch(IOException cleanup){failure.addSuppressed(cleanup);}
+            throw failure;
+        }
     }
 
     /** Null means incomplete; only completed capture is returned, never an ACK. */

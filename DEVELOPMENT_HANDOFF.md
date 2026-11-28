@@ -252,6 +252,9 @@ Parent 34206057a9c565f47d80ceab31e6b1c9965e6ba8. CPUL confirmed sole native owne
 ## RC7 FileTransfer — transport creation option trace
 Parent 1cf434fe575510fc8277b0a6d967944a6b2e258d. Reopened actual extracted Sender/CarKit binaries and disassembly, confirmed option initialization and diagnostic labels for dedicated socket, withoutReply and sendAsIs, separated CarKit builder from Sender's additional options. Unresolved imported keys/UUID remain; request targeted CoreMedia extraction only. Prior CI green 46085359570. No speculative implementation or companion/API changes, no releases. Estimates held. See docs/cpul-filetransfer-integration.md.
 
+## RC7 FileTransfer — passive UUID audit and encoded-message cleanup
+Parent 1d910248bd0a72457ae2bf1eaaa02bd9e2fbd348. Existing RC9/RC10 logs inspected in container: 14/4 distinct unsupported type-130 warnings, no UUID in matched lines. Proposed narrow passive CPUL diagnostics; no native change or inference of FileTransfer. Added receiveEncoded and regression for abort-on-malformed OPACK mid-transfer. Previous CI green 46087565127, new CI pending. CoreMedia unavailable tonight; continue independent capture/export work. No releases.
+
 ## Full seven-stage roadmap
 1. Repository cleanup: preserve release branches/tags, review history, meaningful architectural commits, obsolete infrastructure cleanup, exact baseline tree equivalence and CI; verify historical cleanup evidence before final consolidation.
 2. Logging: CPUL architecture, provider-independent SHA-256, USB mount validation/retry, historical recording recovery, categorized diagnostics/session summaries.
